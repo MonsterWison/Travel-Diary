@@ -35,13 +35,6 @@ struct TravelMapView: View {
                         Button("清除路徑點", action: viewModel.clearTravelPoints)
                         Button("回到當前位置") {
                             viewModel.centerOnCurrentLocation()
-                            if let location = viewModel.currentLocation {
-                                cameraPosition = .region(MKCoordinateRegion(
-                                    center: location.coordinate,
-                                    latitudinalMeters: 1000,
-                                    longitudinalMeters: 1000
-                                ))
-                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -56,14 +49,20 @@ struct TravelMapView: View {
             }
         }
         .onAppear {
-            // 應用啟動時設置到用戶位置
-            if let location = viewModel.currentLocation {
-                cameraPosition = .region(MKCoordinateRegion(
-                    center: location.coordinate,
-                    latitudinalMeters: 1000,
-                    longitudinalMeters: 1000
-                ))
-            }
+            // HIG: 初始設置街道級別縮放
+            cameraPosition = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 22.307761, longitude: 114.257263),
+                latitudinalMeters: 200,  // HIG: 街道級別視圖
+                longitudinalMeters: 200
+            ))
+        }
+        .onReceive(viewModel.$region) { newRegion in
+            // 關鍵修復：監聽ViewModel的region變化，同步更新地圖相機
+            cameraPosition = .region(MKCoordinateRegion(
+                center: newRegion.center,
+                latitudinalMeters: 200,  // HIG: 保持街道級別縮放
+                longitudinalMeters: 200
+            ))
         }
     }
     
@@ -179,15 +178,6 @@ struct TravelMapView: View {
                 print("🎯 定位按鈕被點擊")
                 #endif
                 viewModel.centerOnCurrentLocation()
-                
-                // 使用新的 MapKit API 移動地圖到當前位置
-                if let location = viewModel.currentLocation {
-                    cameraPosition = .region(MKCoordinateRegion(
-                        center: location.coordinate,
-                        latitudinalMeters: 1000,
-                        longitudinalMeters: 1000
-                    ))
-                }
             }) {
                 Image(systemName: viewModel.shouldShowActiveLocationButton ? "location.fill" : "location.circle")
                     .font(.title2)

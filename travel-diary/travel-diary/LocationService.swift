@@ -15,6 +15,11 @@ class LocationService: NSObject, ObservableObject {
         longitude: 114.257263
     )
     
+    // HIG: 位置緩存機制
+    private var lastKnownLocation: CLLocation?
+    private var lastLocationTimestamp: Date?
+    private let locationCacheValidDuration: TimeInterval = 300 // 5分鐘緩存
+    
     @Published var currentLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: Error?
@@ -22,12 +27,14 @@ class LocationService: NSObject, ObservableObject {
     override init() {
         super.init()
         setupLocationManager()
+        loadCachedLocation()
     }
     
     private func setupLocationManager() {
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest // 提高精度
-        locationManager.distanceFilter = 5 // 減少距離過濾器，更頻繁更新
+        // HIG: 使用平衡的精度設置，而不是最高精度
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters // 10米精度，更快
+        locationManager.distanceFilter = 10 // 10米移動才更新
         
         // 獲取當前的授權狀態
         authorizationStatus = locationManager.authorizationStatus
@@ -39,6 +46,27 @@ class LocationService: NSObject, ObservableObject {
         if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
             startLocationUpdates()
         }
+    }
+    
+    /// HIG: 載入緩存的位置
+    private func loadCachedLocation() {
+        if let cachedLocation = lastKnownLocation,
+           let timestamp = lastLocationTimestamp,
+           Date().timeIntervalSince(timestamp) < locationCacheValidDuration {
+            #if DEBUG
+            print("🎯 使用緩存位置，避免重複請求")
+            #endif
+            DispatchQueue.main.async {
+                self.currentLocation = cachedLocation
+            }
+        }
+    }
+    
+    /// HIG: 緩存位置
+    private func cacheLocation(_ location: CLLocation) {
+        lastKnownLocation = location
+        lastLocationTimestamp = Date()
+        // 可以擴展為持久化存儲
     }
     
     /// 請求位置權限
@@ -112,6 +140,7 @@ class LocationService: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.currentLocation = self.fixedHongKongLocation
             self.locationError = nil
+            self.cacheLocation(self.fixedHongKongLocation)
             #if DEBUG
             print("🎯 已設定固定香港位置: \(self.fixedHongKongLocation.coordinate.latitude), \(self.fixedHongKongLocation.coordinate.longitude)")
             #endif
@@ -119,12 +148,15 @@ class LocationService: NSObject, ObservableObject {
         return
         #endif
         
-        // 在真實設備上才進行實際的位置更新
+        // HIG: 先嘗試快速單次位置請求
+        locationManager.requestLocation()
+        
+        // 然後開始持續位置更新
         locationManager.startUpdatingLocation()
         
-        // 設置較長的超時機制
+        // HIG: 縮短超時時間到8秒，提供更快的用戶反饋
         locationUpdateTimer?.invalidate()
-        locationUpdateTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { [weak self] _ in
+        locationUpdateTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
             #if DEBUG
             print("🎯 位置更新超時，重新嘗試...")
             #endif
@@ -139,18 +171,21 @@ class LocationService: NSObject, ObservableObject {
         #endif
         locationManager.stopUpdatingLocation()
         
-        // 延遲2秒後重新開始
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+        // HIG: 縮短延遲時間到1秒
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self else { return }
             if self.authorizationStatus == .authorizedWhenInUse || self.authorizationStatus == .authorizedAlways {
                 #if DEBUG
                 print("🎯 重新開始位置更新")
                 #endif
+                
+                // HIG: 重試時使用更低精度以獲得更快響應
+                self.locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
                 self.locationManager.startUpdatingLocation()
                 
                 // 模擬器環境下，也嘗試單次請求
                 #if targetEnvironment(simulator)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                     self?.locationManager.requestLocation()
                 }
                 #endif
@@ -215,8 +250,8 @@ extension LocationService: CLLocationManagerDelegate {
             return
         }
         
-        // 檢查位置是否太舊（超過5秒）
-        if abs(location.timestamp.timeIntervalSinceNow) > 5.0 {
+        // HIG: 放寬時間檢查，允許稍舊的位置數據
+        if abs(location.timestamp.timeIntervalSinceNow) > 30.0 {
             #if DEBUG
             print("🎯 位置數據太舊，忽略此次更新")
             #endif
@@ -227,14 +262,23 @@ extension LocationService: CLLocationManagerDelegate {
         locationUpdateTimer?.invalidate()
         locationUpdateTimer = nil
         
+        // HIG: 緩存位置以供下次快速啟動使用
+        cacheLocation(location)
+        
         DispatchQueue.main.async {
             self.currentLocation = location
             self.locationError = nil
         }
         
         #if DEBUG
-        print("🎯 位置更新成功，已設置到 currentLocation")
+        print("🎯 位置更新成功，已設置到 currentLocation 並緩存")
         #endif
+        
+        // HIG: 獲得第一個位置後，切換到更高精度但減少頻率的更新
+        if retryCount == 0 {
+            locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            locationManager.distanceFilter = 20 // 20米才更新，減少頻繁更新
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -254,23 +298,45 @@ extension LocationService: CLLocationManagerDelegate {
                     #if DEBUG
                     print("🎯 網絡或位置未知錯誤，第 \(retryCount) 次重試（最多 \(maxRetryCount) 次）")
                     #endif
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                    // HIG: 縮短重試延遲
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                         self?.retryLocationUpdate()
                     }
                 } else {
                     #if DEBUG
                     print("🎯 已達到最大重試次數，停止重試")
                     #endif
-                    DispatchQueue.main.async {
-                        self.locationError = NSError(domain: "LocationService", code: -1, userInfo: [
-                            NSLocalizedDescriptionKey: "無法獲取位置，請檢查網絡連接或位置設置"
-                        ])
+                    // HIG: 如果有緩存位置，使用緩存位置作為備用
+                    if let cachedLocation = lastKnownLocation {
+                        DispatchQueue.main.async {
+                            self.currentLocation = cachedLocation
+                            self.locationError = nil
+                            #if DEBUG
+                            print("🎯 使用緩存位置作為備用")
+                            #endif
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            self.locationError = NSError(domain: "LocationService", code: -1, userInfo: [
+                                NSLocalizedDescriptionKey: "無法獲取位置，請檢查網絡連接或位置設置"
+                            ])
+                        }
                     }
                 }
             default:
                 #if DEBUG
                 print("🎯 其他位置錯誤，不重試: \(clError.localizedDescription)")
                 #endif
+                // HIG: 其他錯誤時也嘗試使用緩存位置
+                if let cachedLocation = lastKnownLocation {
+                    DispatchQueue.main.async {
+                        self.currentLocation = cachedLocation
+                        self.locationError = nil
+                        #if DEBUG
+                        print("🎯 使用緩存位置作為備用")
+                        #endif
+                    }
+                }
                 break
             }
         }
@@ -296,6 +362,7 @@ extension LocationService: CLLocationManagerDelegate {
                 #endif
                 self.currentLocation = self.fixedHongKongLocation
                 self.locationError = nil
+                self.cacheLocation(self.fixedHongKongLocation)
                 #if DEBUG
                 print("🎯 已設定固定香港位置: \(self.fixedHongKongLocation.coordinate.latitude), \(self.fixedHongKongLocation.coordinate.longitude)")
                 #endif

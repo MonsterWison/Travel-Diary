@@ -14,11 +14,15 @@ class LocationViewModel: ObservableObject {
     private static let hongKongLongitude: Double = 114.257263
     private static let mapMovementThreshold: Double = 0.0005 // 約50米
     
+    // HIG: 地圖縮放級別常數 - 按照 Apple 推薦的街道級別視圖
+    private static let streetLevelSpan = MKCoordinateSpan(latitudeDelta: 0.001, longitudeDelta: 0.001) // 約100米範圍
+    private static let neighborhoodSpan = MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003) // 約300米範圍
+    
     // MARK: - Published Properties
     @Published var currentLocation: CLLocation?
     @Published var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 22.3193, longitude: 114.1694), // 預設香港座標
-        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        span: streetLevelSpan // HIG: 使用街道級別的默認縮放
     )
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var showingLocationAlert = false
@@ -64,10 +68,8 @@ class LocationViewModel: ObservableObject {
         bindLocationService()
         updateDebugInfo()
         
-        // 延遲請求權限，確保 UI 已經準備好
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.requestLocationPermission()
-        }
+        // HIG: 立即請求位置權限，不延遲
+        requestLocationPermission()
     }
     
     // MARK: - Private Methods
@@ -118,7 +120,9 @@ class LocationViewModel: ObservableObject {
             #if DEBUG
             print("🎯 自動跟隨位置更新: isFirst=\(isFirstRealLocation), userMoved=\(userHasMovedMap)")
             #endif
-            updateMapRegion(to: location.coordinate)
+            // HIG: 首次位置使用街道級別，後續使用當前縮放級別
+            let zoomLevel = isFirstRealLocation ? Self.streetLevelSpan : region.span
+            updateMapRegion(to: location.coordinate, span: zoomLevel)
             
             // 重置用戶移動標記，開始新的自動跟隨
             if userHasMovedMap {
@@ -187,12 +191,15 @@ class LocationViewModel: ObservableObject {
         updateDebugInfo()
     }
     
-    private func updateMapRegion(to coordinate: CLLocationCoordinate2D) {
+    // HIG: 改進的地圖區域更新方法，支持自定義縮放
+    private func updateMapRegion(to coordinate: CLLocationCoordinate2D, span: MKCoordinateSpan? = nil) {
         isProgrammaticUpdate = true
+        let newSpan = span ?? region.span
+        
         withAnimation(.easeInOut(duration: 1.0)) {
             region = MKCoordinateRegion(
                 center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                span: newSpan
             )
         }
         
@@ -285,7 +292,8 @@ class LocationViewModel: ObservableObject {
         print("🎯 重置用戶移動標記，恢復自動跟隨")
         #endif
         
-        updateMapRegion(to: location.coordinate)
+        // HIG: 定位按鈕點擊時使用街道級別縮放
+        updateMapRegion(to: location.coordinate, span: Self.streetLevelSpan)
     }
     
     /// 切換用戶位置跟隨模式（保持向後兼容）
