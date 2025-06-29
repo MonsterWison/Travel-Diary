@@ -1,88 +1,70 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- 海洋到陸地的漸變背景 -->
-    <linearGradient id="mapBackground" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1E88E5;stop-opacity:1" />
-      <stop offset="40%" style="stop-color:#42A5F5;stop-opacity:1" />
-      <stop offset="60%" style="stop-color:#66BB6A;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#4CAF50;stop-opacity:1" />
+    <!-- 背景漸變 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4FC3F7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#29B6F6;stop-opacity:1" />
     </linearGradient>
     
-    <!-- 路線漸變 -->
-    <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#FF8A50;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FFA726;stop-opacity:1" />
+    <!-- 地圖漸變 -->
+    <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#66BB6A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4CAF50;stop-opacity:1" />
     </linearGradient>
     
     <!-- 位置標記漸變 -->
     <linearGradient id="pinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF1744;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#D32F2F;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#FF5722;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D84315;stop-opacity:1" />
     </linearGradient>
   </defs>
   
   <!-- 完全填滿的背景 -->
-  <rect width="1024" height="1024" fill="url(#mapBackground)" />
+  <rect width="1024" height="1024" fill="url(#bgGradient)" />
   
-  <!-- 大型陸地輪廓 -->
-  <path d="M 200 350 Q 350 280 500 300 Q 650 320 750 400 Q 800 450 820 550 Q 840 650 780 720 Q 700 800 600 780 Q 500 760 400 720 Q 300 680 250 600 Q 200 520 200 350 Z" 
-        fill="#2E7D32" opacity="0.8"/>
+  <!-- 簡單大型地圖形狀 -->
+  <path d="M 0 400 Q 200 300 400 350 Q 600 400 800 350 Q 1000 300 1024 400 L 1024 700 Q 800 650 600 700 Q 400 750 200 700 Q 100 675 0 700 Z" 
+        fill="url(#mapGradient)" />
   
   <!-- 第二個陸地區域 -->
-  <path d="M 100 650 Q 200 600 300 620 Q 400 640 450 700 Q 500 760 420 820 Q 340 880 240 860 Q 140 840 80 780 Q 50 720 100 650 Z" 
-        fill="#388E3C" opacity="0.7"/>
+  <path d="M 100 200 Q 300 150 500 180 Q 700 210 900 180 Q 950 170 1024 200 L 1024 350 Q 800 320 600 350 Q 400 380 200 350 Q 150 340 100 350 Z" 
+        fill="url(#mapGradient)" opacity="0.8"/>
   
-  <!-- 右上角小島 -->
-  <ellipse cx="750" cy="200" rx="80" ry="60" fill="#4CAF50" opacity="0.9"/>
-  
-  <!-- 主要旅行路線 - 粗大明顯 -->
-  <path d="M 150 150 Q 300 200 450 250 Q 600 300 750 350 Q 850 400 900 500" 
-        stroke="url(#routeGradient)" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <!-- 主要旅行路線 - 簡潔粗線 -->
+  <path d="M 150 250 Q 350 200 550 250 Q 750 300 950 250" 
+        stroke="#FFC107" stroke-width="32" fill="none" stroke-linecap="round"/>
   
   <!-- 第二條路線 -->
-  <path d="M 200 500 Q 350 450 500 480 Q 650 510 800 580" 
-        stroke="url(#routeGradient)" stroke-width="20" fill="none" stroke-linecap="round"/>
+  <path d="M 100 500 Q 300 450 500 500 Q 700 550 900 500" 
+        stroke="#FFC107" stroke-width="28" fill="none" stroke-linecap="round"/>
   
   <!-- 大型起點位置標記 -->
-  <circle cx="150" cy="150" r="45" fill="url(#pinGradient)"/>
-  <circle cx="150" cy="150" r="20" fill="#FFFFFF"/>
+  <circle cx="150" cy="250" r="60" fill="url(#pinGradient)"/>
+  <circle cx="150" cy="230" r="25" fill="#FFFFFF"/>
   
   <!-- 中途位置標記 -->
-  <circle cx="450" cy="250" r="35" fill="url(#pinGradient)"/>
-  <circle cx="450" cy="250" r="15" fill="#FFFFFF"/>
+  <circle cx="550" cy="250" r="50" fill="url(#pinGradient)"/>
+  <circle cx="550" cy="235" r="20" fill="#FFFFFF"/>
   
   <!-- 終點位置標記 -->
-  <circle cx="900" cy="500" r="40" fill="url(#pinGradient)"/>
-  <circle cx="900" cy="500" r="18" fill="#FFFFFF"/>
+  <circle cx="950" cy="250" r="55" fill="url(#pinGradient)"/>
+  <circle cx="950" cy="232" r="22" fill="#FFFFFF"/>
   
-  <!-- 左下角飛機圖標 - 大型簡潔 -->
-  <g transform="translate(80,800) scale(3)">
-    <path d="M 20 10 L 30 5 L 35 10 L 30 15 L 20 10 Z" fill="#FFFFFF"/>
-    <path d="M 15 8 L 25 8 L 25 12 L 15 12 Z" fill="#FFFFFF"/>
-    <circle cx="18" cy="10" r="2" fill="#1976D2"/>
-  </g>
+  <!-- 下方路線的位置標記 -->
+  <circle cx="300" cy="450" r="45" fill="url(#pinGradient)"/>
+  <circle cx="300" cy="435" r="18" fill="#FFFFFF"/>
   
-  <!-- 右下角汽車圖標 - 大型簡潔 -->
-  <g transform="translate(850,820) scale(2.5)">
-    <rect x="5" y="15" width="30" height="15" rx="3" fill="#FFFFFF"/>
-    <rect x="8" y="10" width="24" height="8" rx="2" fill="#FFFFFF"/>
-    <circle cx="12" cy="32" r="4" fill="#424242"/>
-    <circle cx="28" cy="32" r="4" fill="#424242"/>
-  </g>
+  <circle cx="700" cy="550" r="48" fill="url(#pinGradient)"/>
+  <circle cx="700" cy="533" r="19" fill="#FFFFFF"/>
   
-  <!-- 指南針圖標 - 右上角大型 -->
-  <g transform="translate(850,80) scale(2.8)">
-    <circle cx="20" cy="20" r="18" fill="#FFFFFF" stroke="#1976D2" stroke-width="2"/>
-    <path d="M 20 8 L 24 20 L 20 16 L 16 20 Z" fill="#FF1744"/>
-    <path d="M 20 32 L 16 20 L 20 24 L 24 20 Z" fill="#FFFFFF" stroke="#424242" stroke-width="1"/>
-  </g>
+  <!-- 大型指南針 - 右上角 -->
+  <circle cx="850" cy="150" r="80" fill="#FFFFFF" stroke="#1976D2" stroke-width="8"/>
+  <path d="M 850 90 L 880 150 L 850 130 L 820 150 Z" fill="#FF1744"/>
+  <path d="M 850 210 L 820 150 L 850 170 L 880 150 Z" fill="#1976D2"/>
   
-  <!-- 地圖圖標 - 左上角 -->
-  <g transform="translate(50,50) scale(3.2)">
-    <rect x="5" y="8" width="30" height="24" rx="2" fill="#FFFFFF" stroke="#1976D2" stroke-width="1.5"/>
-    <path d="M 10 15 Q 15 12 20 15 Q 25 18 30 15" stroke="#4CAF50" stroke-width="2" fill="none"/>
-    <path d="M 10 22 Q 15 19 20 22 Q 25 25 30 22" stroke="#FF9800" stroke-width="2" fill="none"/>
-    <circle cx="15" cy="18" r="2" fill="#FF1744"/>
-  </g>
+  <!-- 簡單地圖圖標 - 左上角 -->
+  <rect x="80" y="80" width="120" height="90" rx="15" fill="#FFFFFF" stroke="#1976D2" stroke-width="6"/>
+  <path d="M 100 120 Q 130 110 160 120 Q 170 125 180 120" stroke="#4CAF50" stroke-width="4" fill="none"/>
+  <path d="M 100 145 Q 130 135 160 145 Q 170 150 180 145" stroke="#FF9800" stroke-width="4" fill="none"/>
+  <circle cx="140" cy="130" r="8" fill="#FF1744"/>
 </svg> 
