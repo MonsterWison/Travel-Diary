@@ -75,9 +75,10 @@ struct TravelMapView: View {
     private var allAnnotations: [MapAnnotationItem] {
         var annotations: [MapAnnotationItem] = []
         
-        // 添加用戶當前位置標註
+        // 添加用戶當前位置標註（使用固定ID避免重新創建）
         if let location = viewModel.currentLocation {
             annotations.append(MapAnnotationItem(
+                id: "user-location", // 固定ID，避免重新創建導致的閃爍
                 coordinate: location.coordinate,
                 isUserLocation: true,
                 travelPoint: nil
@@ -87,6 +88,7 @@ struct TravelMapView: View {
         // 添加旅行路徑點標註
         annotations.append(contentsOf: viewModel.travelPoints.map { point in
             MapAnnotationItem(
+                id: point.id.uuidString, // 使用 TravelPoint 的固定 ID
                 coordinate: point.coordinate,
                 isUserLocation: false,
                 travelPoint: point
@@ -185,19 +187,6 @@ struct TravelMapView: View {
                     .foregroundColor(.white)
                     .frame(width: 50, height: 50)
                     .background(viewModel.shouldShowActiveLocationButton ? .blue : .gray, in: Circle())
-                    .shadow(radius: 3)
-            }
-            .disabled(viewModel.currentLocation == nil)
-            
-            // 手動中心化按鈕（保留作為備用）
-            Button(action: {
-                viewModel.centerOnCurrentLocation()
-            }) {
-                Image(systemName: "scope")
-                    .font(.title2)
-                    .foregroundColor(.white)
-                    .frame(width: 50, height: 50)
-                    .background(.orange, in: Circle())
                     .shadow(radius: 3)
             }
             .disabled(viewModel.currentLocation == nil)
@@ -318,7 +307,7 @@ struct UserLocationAnnotation: View {
 
 // MARK: - 地圖標註項目
 struct MapAnnotationItem: Identifiable {
-    let id = UUID()
+    let id: String
     let coordinate: CLLocationCoordinate2D
     let isUserLocation: Bool
     let travelPoint: TravelPoint?
