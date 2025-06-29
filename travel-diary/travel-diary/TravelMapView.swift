@@ -5,6 +5,7 @@ import MapKit
 struct TravelMapView: View {
     @StateObject private var viewModel = LocationViewModel()
     @State private var showingAddPointAlert = false
+    @State private var cameraPosition = MapCameraPosition.automatic
     
     var body: some View {
         NavigationStack {
@@ -34,6 +35,13 @@ struct TravelMapView: View {
                         Button("清除路徑點", action: viewModel.clearTravelPoints)
                         Button("回到當前位置") {
                             viewModel.centerOnCurrentLocation()
+                            if let location = viewModel.currentLocation {
+                                cameraPosition = .region(MKCoordinateRegion(
+                                    center: location.coordinate,
+                                    latitudinalMeters: 1000,
+                                    longitudinalMeters: 1000
+                                ))
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -47,20 +55,35 @@ struct TravelMapView: View {
                 addPointAlert
             }
         }
+        .onAppear {
+            // 應用啟動時設置到用戶位置
+            if let location = viewModel.currentLocation {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: location.coordinate,
+                    latitudinalMeters: 1000,
+                    longitudinalMeters: 1000
+                ))
+            }
+        }
     }
     
     // MARK: - 地圖視圖
     private var mapView: some View {
-        Map(coordinateRegion: $viewModel.region, 
-            showsUserLocation: false,
-            userTrackingMode: .none,
-            annotationItems: allAnnotations) { annotation in
-            MapAnnotation(coordinate: annotation.coordinate) {
-                if annotation.isUserLocation {
+        Map(position: $cameraPosition) {
+            // 用戶當前位置標註
+            if let location = viewModel.currentLocation {
+                Annotation("當前位置", coordinate: location.coordinate) {
                     UserLocationAnnotation()
-                } else if let travelPoint = annotation.travelPoint {
-                    TravelPointAnnotation(point: travelPoint)
                 }
+                .annotationTitles(.hidden)
+            }
+            
+            // 旅行路徑點標註
+            ForEach(viewModel.travelPoints, id: \.id) { point in
+                Annotation("路徑點", coordinate: point.coordinate) {
+                    TravelPointAnnotation(point: point)
+                }
+                .annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(elevation: .realistic))
@@ -69,33 +92,6 @@ struct TravelMapView: View {
             // 定期檢查地圖位置變化，檢測用戶手動移動
             viewModel.handleUserMapMovement()
         }
-    }
-    
-    // 合併所有標註點（用戶位置 + 旅行點）
-    private var allAnnotations: [MapAnnotationItem] {
-        var annotations: [MapAnnotationItem] = []
-        
-        // 添加用戶當前位置標註（使用固定ID避免重新創建）
-        if let location = viewModel.currentLocation {
-            annotations.append(MapAnnotationItem(
-                id: "user-location", // 固定ID，避免重新創建導致的閃爍
-                coordinate: location.coordinate,
-                isUserLocation: true,
-                travelPoint: nil
-            ))
-        }
-        
-        // 添加旅行路徑點標註
-        annotations.append(contentsOf: viewModel.travelPoints.map { point in
-            MapAnnotationItem(
-                id: point.id.uuidString, // 使用 TravelPoint 的固定 ID
-                coordinate: point.coordinate,
-                isUserLocation: false,
-                travelPoint: point
-            )
-        })
-        
-        return annotations
     }
     
     // MARK: - 位置信息卡片
@@ -181,6 +177,15 @@ struct TravelMapView: View {
             Button(action: {
                 print("🎯 定位按鈕被點擊")
                 viewModel.centerOnCurrentLocation()
+                
+                // 使用新的 MapKit API 移動地圖到當前位置
+                if let location = viewModel.currentLocation {
+                    cameraPosition = .region(MKCoordinateRegion(
+                        center: location.coordinate,
+                        latitudinalMeters: 1000,
+                        longitudinalMeters: 1000
+                    ))
+                }
             }) {
                 Image(systemName: viewModel.shouldShowActiveLocationButton ? "location.fill" : "location.circle")
                     .font(.title2)
@@ -303,14 +308,6 @@ struct UserLocationAnnotation: View {
         }
         .id("user-location-annotation") // 確保視圖身份穩定
     }
-}
-
-// MARK: - 地圖標註項目
-struct MapAnnotationItem: Identifiable {
-    let id: String
-    let coordinate: CLLocationCoordinate2D
-    let isUserLocation: Bool
-    let travelPoint: TravelPoint?
 }
 
 // MARK: - Preview
