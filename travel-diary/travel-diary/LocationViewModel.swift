@@ -4,6 +4,15 @@ import Combine
 import MapKit
 import SwiftUI
 
+/// 搜索結果數據模型
+struct SearchResult: Identifiable {
+    let id = UUID()
+    let name: String
+    let subtitle: String?
+    let coordinate: CLLocationCoordinate2D
+    let placemark: MKPlacemark
+}
+
 /// 位置ViewModel - 處理地圖相關的業務邏輯
 class LocationViewModel: ObservableObject {
     private let locationService = LocationService()
@@ -32,6 +41,14 @@ class LocationViewModel: ObservableObject {
     @Published var locationError: Error?
     @Published var isTrackingUser: Bool = false // 是否跟隨用戶位置
     
+    // MARK: - 搜索相關屬性
+    @Published var searchText: String = ""
+    @Published var searchResults: [SearchResult] = []
+    @Published var isSearching: Bool = false
+    @Published var selectedSearchResult: SearchResult?
+    @Published var showingSearchResults: Bool = false
+    @Published var gpsSignalStrength: GPSSignalStrength = .invalid
+    
     // 私有屬性 - 追蹤是否已經獲取過真實位置
     private var hasReceivedFirstRealLocation = false
     // 追蹤用戶是否手動移動了地圖
@@ -40,6 +57,10 @@ class LocationViewModel: ObservableObject {
     private var isProgrammaticUpdate: Bool = false
     // 追蹤上一次的地圖中心位置
     private var lastKnownMapCenter: CLLocationCoordinate2D?
+    
+    // 搜索相關私有屬性
+    private var searchCompleter = MKLocalSearchCompleter()
+    private var searchCancellable: AnyCancellable?
     
     // 計算屬性：判斷地圖是否中心在當前位置
     var isMapCenteredOnLocation: Bool {
@@ -66,6 +87,7 @@ class LocationViewModel: ObservableObject {
     // MARK: - Initialization
     init() {
         bindLocationService()
+        setupSearch()
         updateDebugInfo()
         
         // HIG: 立即請求位置權限，不延遲
@@ -94,6 +116,13 @@ class LocationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] error in
                 self?.handleLocationError(error)
+            }
+            .store(in: &cancellables)
+        
+        locationService.$gpsSignalStrength
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] strength in
+                self?.gpsSignalStrength = strength
             }
             .store(in: &cancellables)
     }
@@ -328,6 +357,206 @@ class LocationViewModel: ObservableObject {
         case .authorizedAlways: return "總是允許"
         case .authorizedWhenInUse: return "使用時允許"
         @unknown default: return "未知"
+        }
+    }
+    
+    // MARK: - 搜索設置
+    private func setupSearch() {
+        // HIG: 設置搜索文字變化監聽，縮短延遲提高響應性
+        $searchText
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main) // 縮短延遲
+            .removeDuplicates()
+            .sink { [weak self] searchText in
+                self?.performSearch(query: searchText)
+            }
+            .store(in: &cancellables)
+    }
+    
+    // MARK: - 搜索方法
+    func performSearch(query: String) {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // HIG: 搜索文字為空時清理搜索狀態
+            searchResults = []
+            showingSearchResults = false
+            selectedSearchResult = nil
+            isSearching = false
+            return
+        }
+        
+        isSearching = true
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        
+        // HIG: 擴大搜索範圍，優化搜索區域設置
+        if let currentLocation = currentLocation {
+            request.region = MKCoordinateRegion(
+                center: currentLocation.coordinate,
+                latitudinalMeters: 100000, // 擴大到100公里範圍
+                longitudinalMeters: 100000
+            )
+        } else {
+            // HIG: 默認以香港為中心，擴大搜索範圍覆蓋珠三角地區
+            request.region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: Self.hongKongLatitude, longitude: Self.hongKongLongitude),
+                latitudinalMeters: 200000, // 200公里範圍，覆蓋廣深港地區
+                longitudinalMeters: 200000
+            )
+        }
+        
+        // HIG: 設置搜索結果類型，提高搜索準確性
+        request.resultTypes = [.pointOfInterest, .address]
+        
+        let search = MKLocalSearch(request: request)
+        
+        // 取消之前的搜索
+        searchCancellable?.cancel()
+        
+        searchCancellable = Future<[SearchResult], Error> { promise in
+            search.start { response, error in
+                if let error = error {
+                    promise(.failure(error))
+                    return
+                }
+                
+                guard let response = response else {
+                    promise(.success([]))
+                    return
+                }
+                
+                // HIG: 優化搜索結果，提供更豐富的地址信息
+                let results = response.mapItems.map { item in
+                    let name = item.name ?? "未知位置"
+                    let subtitle = [
+                        item.placemark.thoroughfare,
+                        item.placemark.locality,
+                        item.placemark.administrativeArea
+                    ].compactMap { $0 }.joined(separator: ", ")
+                    
+                    return SearchResult(
+                        name: name,
+                        subtitle: subtitle.isEmpty ? nil : subtitle,
+                        coordinate: item.placemark.coordinate,
+                        placemark: item.placemark
+                    )
+                }
+                
+                promise(.success(results))
+            }
+        }
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { [weak self] completion in
+                self?.isSearching = false
+                if case .failure(let error) = completion {
+                    #if DEBUG
+                    print("🔍 搜索錯誤: \(error.localizedDescription)")
+                    #endif
+                }
+            },
+            receiveValue: { [weak self] results in
+                self?.searchResults = results
+                // HIG: 保持搜索界面顯示，無論是否有結果
+                // showingSearchResults 由View層的onChange控制
+                #if DEBUG
+                print("🔍 搜索完成，找到 \(results.count) 個結果")
+                if results.isEmpty {
+                    print("🔍 沒有找到相關結果")
+                } else {
+                    for result in results.prefix(3) {
+                        print("🔍 結果: \(result.name) - \(result.subtitle ?? "無副標題")")
+                    }
+                }
+                #endif
+            }
+        )
+    }
+    
+    // HIG: 選擇搜索結果並更新地圖
+    func selectSearchResult(_ result: SearchResult) {
+        selectedSearchResult = result
+        showingSearchResults = false
+        searchText = result.name
+        
+        // HIG: 重置用戶移動標記，允許搜索結果覆蓋用戶行為
+        userHasMovedMap = false
+        
+        // HIG: 移動地圖到搜索結果位置，使用適當的縮放級別
+        moveToLocation(coordinate: result.coordinate, zoomLevel: .neighborhood)
+        
+        #if DEBUG
+        print("🔍 已選擇搜索結果: \(result.name) 位於: \(result.coordinate)")
+        print("🔍 重置用戶移動標記，地圖將跟隨到搜索位置")
+        #endif
+    }
+    
+    // HIG: 立即執行搜索（用於用戶按執行鍵時）
+    func performImmediateSearch() {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
+        // 取消debounce，立即搜索
+        searchCancellable?.cancel()
+        performSearch(query: searchText)
+        
+        #if DEBUG
+        print("🔍 立即搜索: \(searchText)")
+        #endif
+    }
+    
+    // HIG: 清除搜索結果
+    func clearSearch() {
+        searchText = ""
+        searchResults = []
+        selectedSearchResult = nil
+        showingSearchResults = false
+        isSearching = false
+    }
+    
+    // 移動到指定位置的方法（支持不同縮放級別）
+    enum ZoomLevel {
+        case street    // 街道級別 (100米)
+        case neighborhood  // 社區級別 (300米)
+        case city      // 城市級別 (1公里)
+        
+        var span: MKCoordinateSpan {
+            switch self {
+            case .street:
+                return MKCoordinateSpan(latitudeDelta: 0.001, longitudeDelta: 0.001)
+            case .neighborhood:
+                return MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
+            case .city:
+                return MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            }
+        }
+    }
+    
+    // HIG: 移動地圖到指定位置（支持不同縮放級別）
+    func moveToLocation(coordinate: CLLocationCoordinate2D, zoomLevel: ZoomLevel = .neighborhood) {
+        isProgrammaticUpdate = true
+        
+        // HIG: 使用平滑動畫移動地圖
+        withAnimation(.easeInOut(duration: 1.0)) {
+            region = MKCoordinateRegion(
+                center: coordinate,
+                span: zoomLevel.span
+            )
+        }
+        
+        // 延遲重置程序化更新標記
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            self.isProgrammaticUpdate = false
+        }
+        
+        // 標記用戶已移動地圖（如果不是移動到當前位置）
+        if let currentLocation = currentLocation {
+            let currentCoordinate = currentLocation.coordinate
+            let distance = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                .distance(from: CLLocation(latitude: currentCoordinate.latitude, longitude: currentCoordinate.longitude))
+            
+            if distance > 100 { // 如果距離超過100米，標記為用戶移動
+                userHasMovedMap = true
+            }
         }
     }
 }

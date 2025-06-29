@@ -2,6 +2,42 @@ import Foundation
 import CoreLocation
 import Combine
 
+/// GPS信號強度狀態
+enum GPSSignalStrength {
+    case excellent      // ≤ 5米
+    case good          // ≤ 20米
+    case fair          // ≤ 50米
+    case poor          // ≤ 100米
+    case veryPoor      // > 100米
+    case invalid       // < 0米（無效）
+    
+    var description: String {
+        switch self {
+        case .excellent:
+            return "GPS信號優秀"
+        case .good:
+            return "GPS信號良好"
+        case .fair:
+            return "GPS信號普通"
+        case .poor:
+            return "GPS信號較弱"
+        case .veryPoor:
+            return "GPS信號很弱"
+        case .invalid:
+            return "GPS信號無效"
+        }
+    }
+    
+    var shouldShowWarning: Bool {
+        switch self {
+        case .poor, .veryPoor, .invalid:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 /// 位置服務 - 負責處理所有位置相關的核心功能
 class LocationService: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
@@ -23,6 +59,7 @@ class LocationService: NSObject, ObservableObject {
     @Published var currentLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: Error?
+    @Published var gpsSignalStrength: GPSSignalStrength = .invalid
     
     override init() {
         super.init()
@@ -145,9 +182,7 @@ class LocationService: NSObject, ObservableObject {
             print("🎯 已設定固定香港位置: \(self.fixedHongKongLocation.coordinate.latitude), \(self.fixedHongKongLocation.coordinate.longitude)")
             #endif
         }
-        return
-        #endif
-        
+        #else
         // HIG: 先嘗試快速單次位置請求
         locationManager.requestLocation()
         
@@ -162,6 +197,7 @@ class LocationService: NSObject, ObservableObject {
             #endif
             self?.retryLocationUpdate()
         }
+        #endif
     }
     
     /// 重試位置更新
@@ -203,6 +239,32 @@ class LocationService: NSObject, ObservableObject {
         locationUpdateTimer = nil
     }
     
+    /// 評估GPS信號強度
+    private func evaluateGPSSignalStrength(_ location: CLLocation) -> GPSSignalStrength {
+        let accuracy = location.horizontalAccuracy
+        
+        // 根據環境返回GPS信號強度
+        #if targetEnvironment(simulator)
+        // 模擬器環境總是返回good信號
+        return .good
+        #else
+        // 實際設備根據精度計算信號強度
+        if accuracy < 0 {
+            return .invalid
+        } else if accuracy <= 5 {
+            return .excellent
+        } else if accuracy <= 20 {
+            return .good
+        } else if accuracy <= 50 {
+            return .fair
+        } else if accuracy <= 100 {
+            return .poor
+        } else {
+            return .veryPoor
+        }
+        #endif
+    }
+    
     /// 取得當前位置的地址（地理編碼）
     func getAddressFromLocation(_ location: CLLocation, completion: @escaping (String?) -> Void) {
         let geocoder = CLGeocoder()
@@ -236,17 +298,25 @@ class LocationService: NSObject, ObservableObject {
 // MARK: - CLLocationManagerDelegate
 extension LocationService: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
+        guard let location = locations.last else { 
+            return 
+        }
         #if DEBUG
         print("🎯 收到位置更新: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         print("🎯 位置精度: \(location.horizontalAccuracy)m, 時間: \(location.timestamp)")
         #endif
+        
+        // 檢測GPS信號強度
+        let signalStrength = evaluateGPSSignalStrength(location)
         
         // 檢查位置是否有效（精度是否足夠好）
         if location.horizontalAccuracy < 0 {
             #if DEBUG
             print("🎯 位置精度無效，忽略此次更新")
             #endif
+            DispatchQueue.main.async {
+                self.gpsSignalStrength = .invalid
+            }
             return
         }
         
@@ -268,10 +338,12 @@ extension LocationService: CLLocationManagerDelegate {
         DispatchQueue.main.async {
             self.currentLocation = location
             self.locationError = nil
+            self.gpsSignalStrength = signalStrength
         }
         
         #if DEBUG
         print("🎯 位置更新成功，已設置到 currentLocation 並緩存")
+        print("🎯 GPS信號強度: \(signalStrength.description)")
         #endif
         
         // HIG: 獲得第一個位置後，切換到更高精度但減少頻率的更新
@@ -287,6 +359,7 @@ extension LocationService: CLLocationManagerDelegate {
         #endif
         DispatchQueue.main.async {
             self.locationError = error
+            self.gpsSignalStrength = .invalid // 定位失敗時設置為無效信號
         }
         
         // 如果是網絡錯誤且未超過重試次數，重試
@@ -337,7 +410,6 @@ extension LocationService: CLLocationManagerDelegate {
                         #endif
                     }
                 }
-                break
             }
         }
     }
