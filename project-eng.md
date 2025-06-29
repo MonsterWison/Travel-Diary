@@ -194,3 +194,40 @@ flowchart TD
 - Add multimedia capture functionality
 - Develop timeline browsing interface
 - Create detailed travel record pages
+
+---
+
+### Latest Updates (June 29, 2025 Evening)
+
+#### 📱 **App Name and Deployment Optimization - Completed**
+- ✅ **Permanent App Display Name Configuration**
+  - Modified Xcode project configuration file (project.pbxproj)
+  - Added `INFOPLIST_KEY_CFBundleDisplayName = "旅行地圖"` to both Debug and Release configurations
+  - Ensured app name always displays as "旅行地圖" (Travel Map) whenever synced to device
+
+- ✅ **Physical Device Deployment Implementation**
+  - Used Apple Developer certificate for code signing
+    - Signing Identity: `Apple Development: wilson_23@hotmail.com (WP36TJ78N6)`
+    - Provisioning Profile: `iOS Team Provisioning Profile: com.wilsonho.travelDiary`
+  - Built Release version for arm64-apple-ios18.5 architecture
+  - Successfully created .xcarchive package
+
+- ✅ **Device Installation and Testing**
+  - Successfully detected connected iPhone 13 "Monster" device
+  - Used `xcrun devicectl` tool to install app on physical device
+  - App launch testing passed
+  - Confirmed Info.plist `CFBundleDisplayName` correctly set to "旅行地圖"
+
+#### 🔧 **Technical Implementation Details**
+- Modified project configuration files to support physical device deployment
+- Implemented complete workflow from simulator development to device deployment
+- Ensured app name consistency across all scenarios
+- Verified proper Apple Developer certificate and provisioning profile configuration
+
+#### 📱 **Updated Application Status**
+- Bundle ID: `com.wilsonho.travelDiary`
+- Display Name: "旅行地圖" (Travel Map) - permanently configured
+- Deployment Target: iOS 18.5
+- Development & Deployment: Xcode Project → iPhone 13 Physical Device
+- Signing Status: Signed with Apple Developer certificate
+- Installation Status: Successfully installed on device and running

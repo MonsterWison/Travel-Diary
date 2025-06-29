@@ -196,3 +196,40 @@ flowchart TD
 - 新增多媒體拍攝功能
 - 時間軸瀏覽介面開發
 - 旅行記錄詳細頁面
+
+---
+
+### 新增更新 (2025年6月29日 晚間)
+
+#### 📱 **應用程序名稱與部署優化 - 已完成**
+- ✅ **應用程序顯示名稱永久設置**
+  - 修改 Xcode 項目配置文件 (project.pbxproj)
+  - 在 Debug 和 Release 配置中添加 `INFOPLIST_KEY_CFBundleDisplayName = "旅行地圖"`
+  - 確保無論何時同步到手機，應用程序名稱永遠顯示為「旅行地圖」
+
+- ✅ **真機部署實現**
+  - 使用 Apple Developer 證書進行代碼簽名
+    - 簽名身份：`Apple Development: wilson_23@hotmail.com (WP36TJ78N6)`
+    - 配置文件：`iOS Team Provisioning Profile: com.wilsonho.travelDiary`
+  - 為 arm64-apple-ios18.5 架構構建 Release 版本
+  - 成功創建 .xcarchive 檔案
+
+- ✅ **設備安裝與測試**
+  - 成功檢測連接的 iPhone 13 "Monster" 設備
+  - 使用 `xcrun devicectl` 工具安裝應用程序到真機
+  - 應用程序啟動測試通過
+  - 確認 Info.plist 中 `CFBundleDisplayName` 正確設置為「旅行地圖」
+
+#### 🔧 **技術實現細節**
+- 修改項目配置文件以支持真機部署
+- 實現從模擬器開發到真機部署的完整流程
+- 確保應用程序名稱在所有情況下的一致性
+- 驗證 Apple Developer 證書和配置文件的正確配置
+
+#### 📱 **更新後的應用程序狀態**
+- Bundle ID: `com.wilsonho.travelDiary`
+- 顯示名稱: 「旅行地圖」（永久設置）
+- 部署目標: iOS 18.5
+- 開發與部署: Xcode 專案 → iPhone 13 真機
+- 簽名狀態: 使用 Apple Developer 證書簽名
+- 安裝狀態: 已成功安裝到真機並運行
