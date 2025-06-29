@@ -1,0 +1,137 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圓角矩形（iOS超橢圓形狀） -->
+  <rect width="1024" height="1024" rx="227" ry="227" fill="url(#bgGradient)"/>
+  
+  <!-- 定義漸變 -->
+  <defs>
+    <!-- 背景漸變：海洋藍到天空藍 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#007AFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5DADE2;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 地圖漸變：淺藍到白色 -->
+    <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8F6FF;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0.8" />
+    </linearGradient>
+    
+    <!-- 路線漸變：橙色到紅色 -->
+    <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B47;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF9500;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 指南針漸變：金色 -->
+    <radialGradient id="compassGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- 投影效果 -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- 主地圖容器 -->
+  <g transform="translate(150, 180)">
+    <!-- 地圖背景 -->
+    <rect width="650" height="500" rx="40" ry="40" fill="url(#mapGradient)" filter="url(#shadow)" stroke="#FFFFFF" stroke-width="8"/>
+    
+    <!-- 地圖網格線 -->
+    <g stroke="#B3D9FF" stroke-width="2" opacity="0.4">
+      <!-- 垂直線 -->
+      <line x1="130" y1="40" x2="130" y2="460"/>
+      <line x1="260" y1="40" x2="260" y2="460"/>
+      <line x1="390" y1="40" x2="390" y2="460"/>
+      <line x1="520" y1="40" x2="520" y2="460"/>
+      
+      <!-- 水平線 -->
+      <line x1="40" y1="125" x2="610" y2="125"/>
+      <line x1="40" y1="250" x2="610" y2="250"/>
+      <line x1="40" y1="375" x2="610" y2="375"/>
+    </g>
+    
+    <!-- 旅行路線 -->
+    <path d="M80 400 Q200 300 320 250 Q450 200 570 120" 
+          stroke="url(#routeGradient)" 
+          stroke-width="12" 
+          fill="none" 
+          stroke-linecap="round"
+          filter="url(#shadow)"/>
+    
+    <!-- 出發點標記 -->
+    <circle cx="80" cy="400" r="20" fill="#34C759" stroke="#FFFFFF" stroke-width="6" filter="url(#shadow)"/>
+    
+    <!-- 中間點標記 -->
+    <circle cx="320" cy="250" r="16" fill="#FF3B30" stroke="#FFFFFF" stroke-width="4" filter="url(#shadow)"/>
+    
+    <!-- 終點標記 -->
+    <circle cx="570" cy="120" r="18" fill="#FF3B30" stroke="#FFFFFF" stroke-width="5" filter="url(#shadow)"/>
+    
+    <!-- 地標圖標 -->
+    <!-- 建築物1 -->
+    <rect x="180" y="320" width="25" height="35" fill="#87CEEB" stroke="#FFFFFF" stroke-width="2"/>
+    <polygon points="180,320 192.5,300 205,320" fill="#FF6B47"/>
+    
+    <!-- 建築物2 -->
+    <rect x="420" y="280" width="20" height="40" fill="#87CEEB" stroke="#FFFFFF" stroke-width="2"/>
+    <polygon points="420,280 430,260 440,280" fill="#FF6B47"/>
+    
+    <!-- 樹木 -->
+    <circle cx="500" cy="380" r="15" fill="#34C759"/>
+    <rect x="495" y="380" width="10" height="20" fill="#8B4513"/>
+  </g>
+  
+  <!-- 指南針 -->
+  <g transform="translate(780, 200)">
+    <!-- 指南針外圈 -->
+    <circle cx="0" cy="0" r="110" fill="url(#compassGradient)" stroke="#FFFFFF" stroke-width="8" filter="url(#shadow)"/>
+    
+    <!-- 指南針內圈 -->
+    <circle cx="0" cy="0" r="85" fill="#FFFFFF" stroke="#D1D1D6" stroke-width="3"/>
+    
+    <!-- 指針 -->
+    <g>
+      <!-- 北針（紅色） -->
+      <polygon points="0,-70 -15,-10 0,0 15,-10" fill="#FF3B30"/>
+      <!-- 南針（白色） -->
+      <polygon points="0,70 -15,10 0,0 15,10" fill="#8E8E93"/>
+    </g>
+    
+    <!-- 中心點 -->
+    <circle cx="0" cy="0" r="12" fill="#007AFF" stroke="#FFFFFF" stroke-width="3"/>
+    
+    <!-- 方向標記 -->
+    <text x="0" y="-95" text-anchor="middle" font-family="SF Pro Display" font-size="24" font-weight="bold" fill="#1D1D1F">N</text>
+    <text x="0" y="105" text-anchor="middle" font-family="SF Pro Display" font-size="18" font-weight="600" fill="#8E8E93">S</text>
+    <text x="-100" y="8" text-anchor="middle" font-family="SF Pro Display" font-size="18" font-weight="600" fill="#8E8E93">W</text>
+    <text x="100" y="8" text-anchor="middle" font-family="SF Pro Display" font-size="18" font-weight="600" fill="#8E8E93">E</text>
+  </g>
+  
+  <!-- 當前位置標記 -->
+  <g transform="translate(380, 580)">
+    <!-- 外圈脈動效果 -->
+    <circle cx="0" cy="0" r="45" fill="#007AFF" opacity="0.3"/>
+    <circle cx="0" cy="0" r="30" fill="#007AFF" opacity="0.5"/>
+    <!-- 內圓點 -->
+    <circle cx="0" cy="0" r="18" fill="#007AFF" stroke="#FFFFFF" stroke-width="6" filter="url(#shadow)"/>
+  </g>
+  
+  <!-- 裝飾元素 -->
+  <!-- 小飛機圖標 -->
+  <g transform="translate(450, 750) scale(0.8)">
+    <path d="M0,-20 L-10,10 L-25,8 L-25,15 L-10,13 L0,25 L10,13 L25,15 L25,8 L10,10 Z" 
+          fill="#FFFFFF" 
+          stroke="#007AFF" 
+          stroke-width="3" 
+          filter="url(#shadow)"/>
+  </g>
+  
+  <!-- 底部標題背景 -->
+  <rect x="150" y="780" width="724" height="120" rx="30" ry="30" fill="#FFFFFF" opacity="0.15"/>
+  
+  <!-- 底部圖標說明文字 -->
+  <text x="512" y="850" text-anchor="middle" font-family="SF Pro Display" font-size="42" font-weight="700" fill="#FFFFFF">旅行地圖</text>
+</svg> 
