@@ -1,7 +1,7 @@
 import SwiftUI
 import MapKit
 
-/// 旅行地圖主視圖 - 符合 HIG 設計規範
+/// 旅遊日誌主視圖 - 符合 HIG 設計規範
 struct TravelMapView: View {
     @StateObject private var viewModel = LocationViewModel()
     @State private var showingAddPointAlert = false
@@ -27,7 +27,7 @@ struct TravelMapView: View {
                 }
                 .padding()
             }
-            .navigationTitle("旅行地圖")
+            .navigationTitle("旅遊日誌")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
