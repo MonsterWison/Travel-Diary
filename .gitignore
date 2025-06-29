@@ -14,6 +14,11 @@ DerivedData/
 !default.perspectivev3
 xcuserdata/
 
+## Xcode workspace and project user settings
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
 ## Other
 *.moved-aside
 *.xccheckout
@@ -51,4 +56,8 @@ fastlane/test_output
 iOSInjectionProject/
 
 # macOS
-.DS_Store 
+.DS_Store
+
+# Additional iOS development files
+*.mobileprovision
+*.p12 

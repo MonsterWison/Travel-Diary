@@ -175,7 +175,9 @@ struct TravelMapView: View {
         HStack(spacing: 16) {
             // 智能定位按鈕 - 只有當地圖偏離當前位置時才高亮
             Button(action: {
+                #if DEBUG
                 print("🎯 定位按鈕被點擊")
+                #endif
                 viewModel.centerOnCurrentLocation()
                 
                 // 使用新的 MapKit API 移動地圖到當前位置

@@ -9,6 +9,11 @@ class LocationViewModel: ObservableObject {
     private let locationService = LocationService()
     private var cancellables = Set<AnyCancellable>()
     
+    // 常數定義
+    private static let hongKongLatitude: Double = 22.307761
+    private static let hongKongLongitude: Double = 114.257263
+    private static let mapMovementThreshold: Double = 0.0005 // 約50米
+    
     // MARK: - Published Properties
     @Published var currentLocation: CLLocation?
     @Published var region = MKCoordinateRegion(
@@ -98,9 +103,10 @@ class LocationViewModel: ObservableObject {
         updateDebugInfo()
         
         // 檢查是否為固定的香港位置
-        if abs(location.coordinate.latitude - 22.307761) < 0.0001 && 
-           abs(location.coordinate.longitude - 114.257263) < 0.0001 {
+        if isFixedHongKongLocation(location) {
+            #if DEBUG
             print("🎯 收到固定香港位置")
+            #endif
             currentAddress = "香港新界將軍澳彩明苑彩富閣"
         }
         
@@ -109,27 +115,34 @@ class LocationViewModel: ObservableObject {
         let shouldAutoFollow = !userHasMovedMap || isFirstRealLocation
         
         if shouldAutoFollow {
+            #if DEBUG
             print("🎯 自動跟隨位置更新: isFirst=\(isFirstRealLocation), userMoved=\(userHasMovedMap)")
+            #endif
             updateMapRegion(to: location.coordinate)
             
             // 重置用戶移動標記，開始新的自動跟隨
             if userHasMovedMap {
                 userHasMovedMap = false
+                #if DEBUG
                 print("🎯 重置用戶移動標記，恢復自動跟隨")
+                #endif
             }
             
             // 標記已經獲取過真實位置
             if isFirstRealLocation {
                 hasReceivedFirstRealLocation = true
+                #if DEBUG
                 print("🎯 首次真實位置獲取完成，已自動跟隨")
+                #endif
             }
         } else {
+            #if DEBUG
             print("🎯 用戶已手動移動地圖，跳過自動跟隨")
+            #endif
         }
         
         // 獲取地址信息（只有在非固定位置時才進行地理編碼）
-        if !(abs(location.coordinate.latitude - 22.307761) < 0.0001 && 
-             abs(location.coordinate.longitude - 114.257263) < 0.0001) {
+        if !isFixedHongKongLocation(location) {
             locationService.getAddressFromLocation(location) { [weak self] address in
                 DispatchQueue.main.async {
                     self?.currentAddress = address ?? "無法獲取地址"
@@ -139,6 +152,12 @@ class LocationViewModel: ObservableObject {
         } else {
             updateDebugInfo()
         }
+    }
+    
+    /// 檢查是否為固定香港位置
+    private func isFixedHongKongLocation(_ location: CLLocation) -> Bool {
+        return abs(location.coordinate.latitude - Self.hongKongLatitude) < 0.0001 &&
+               abs(location.coordinate.longitude - Self.hongKongLongitude) < 0.0001
     }
     
     private func handleAuthorizationChange(_ status: CLAuthorizationStatus) {
@@ -160,7 +179,9 @@ class LocationViewModel: ObservableObject {
     private func handleLocationError(_ error: Error?) {
         locationError = error
         if let error = error {
+            #if DEBUG
             print("🎯 ViewModel 收到位置錯誤: \(error.localizedDescription)")
+            #endif
             currentAddress = "位置獲取失敗: \(error.localizedDescription)"
         }
         updateDebugInfo()
@@ -187,7 +208,9 @@ class LocationViewModel: ObservableObject {
     /// 處理用戶手動移動地圖
     func handleUserMapMovement() {
         guard !isProgrammaticUpdate else { 
+            #if DEBUG
             print("🎯 跳過程序化地圖更新")
+            #endif
             return 
         }
         
@@ -199,13 +222,13 @@ class LocationViewModel: ObservableObject {
             let lonDiff = abs(currentMapCenter.longitude - lastCenter.longitude)
             
             // 如果變化超過閾值（約50米），認為是用戶手動移動
-            let movementThreshold = 0.0005
-            
-            if latDiff > movementThreshold || lonDiff > movementThreshold {
+            if latDiff > Self.mapMovementThreshold || lonDiff > Self.mapMovementThreshold {
                 if !userHasMovedMap {
                     userHasMovedMap = true
+                    #if DEBUG
                     print("🎯 檢測到用戶手動移動地圖，停止自動跟隨")
                     print("🎯 變化: lat=\(latDiff), lon=\(lonDiff)")
+                    #endif
                 }
                 lastKnownMapCenter = currentMapCenter
             }
@@ -217,7 +240,9 @@ class LocationViewModel: ObservableObject {
     
     // MARK: - Public Methods
     func requestLocationPermission() {
+        #if DEBUG
         print("🎯 重新請求位置權限，重置首次位置標記")
+        #endif
         hasReceivedFirstRealLocation = false // 重置標記，下次獲取位置時自動跟隨
         locationService.requestLocationPermission()
     }
@@ -238,19 +263,27 @@ class LocationViewModel: ObservableObject {
     
     /// 中心化到當前位置並恢復自動跟隨
     func centerOnCurrentLocation() {
+        #if DEBUG
         print("🎯 定位按鈕被點擊")
+        #endif
         
         guard let location = currentLocation else {
+            #if DEBUG
             print("🎯 沒有當前位置，重新請求位置權限")
+            #endif
             requestLocationPermission()
             return
         }
         
+        #if DEBUG
         print("🎯 有當前位置，更新地圖區域到: \(location.coordinate)")
+        #endif
         
         // 重置用戶移動標記，恢復自動跟隨
         userHasMovedMap = false
+        #if DEBUG
         print("🎯 重置用戶移動標記，恢復自動跟隨")
+        #endif
         
         updateMapRegion(to: location.coordinate)
     }
