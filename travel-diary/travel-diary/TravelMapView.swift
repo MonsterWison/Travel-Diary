@@ -668,35 +668,11 @@ struct TravelPointAnnotation: View {
 struct UserLocationAnnotation: View {
     let heading: CLHeading?
     
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var animationStarted = false
-    
     var body: some View {
-        ZStack {
-            // Apple Maps真實脈動效果（更大更明顯）
-            Circle()
-                .fill(Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.15)) // Apple Maps淺藍色脈動
-                .frame(width: 50, height: 50) // 更大的脈動圓圈，匹配Apple Maps
-                .scaleEffect(pulseScale)
-                .animation(
-                    animationStarted ? 
-                        .easeInOut(duration: 2).repeatForever(autoreverses: true) : 
-                        .none, 
-                    value: pulseScale
-                )
-            
-            // HIG: Apple Maps標準定位點（永久顯示方向光束）
-            // 永遠顯示方向指示器，即使沒有精確的heading數據也要顯示默認方向
-            AppleMapLocationWithBeam(heading: heading)
-        }
-        .onAppear {
-            // 只在首次出現時啟動動畫，避免重複觸發
-            if !animationStarted {
-                animationStarted = true
-                pulseScale = 1.4 // Apple Maps真實脈動比例
-            }
-        }
-        .id("user-location-annotation") // 確保視圖身份穩定
+        // HIG: Apple Maps標準定位點（永久顯示方向光束）
+        // 移除脈動效果，完全匹配Apple Maps的簡潔設計
+        AppleMapLocationWithBeam(heading: heading)
+            .id("user-location-annotation") // 確保視圖身份穩定
     }
 }
 
@@ -730,22 +706,22 @@ struct AppleMapLocationWithBeam: View {
     
     var body: some View {
         ZStack {
-            // Apple Maps向外擴散漸變光束（從深色到透明）
+            // Apple Maps向外擴散漸變光束（從深色到透明）- 調整長度匹配Apple Maps
             AppleMapDirectionalBeam()
                 .fill(
                     RadialGradient(
                         gradient: Gradient(stops: [
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.7), location: 0.0), // 中心深色
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.4), location: 0.3), // 中間過渡
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.1), location: 0.7), // 邊緣漸淡
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.8), location: 0.0), // 中心深色
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.5), location: 0.2), // 中間過渡
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.2), location: 0.6), // 邊緣漸淡
                             .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.0), location: 1.0)  // 完全透明
                         ]),
                         center: .center,
-                        startRadius: 2,
-                        endRadius: 30
+                        startRadius: 1,
+                        endRadius: 50 // 增加光束長度以匹配Apple Maps
                     )
                 )
-                .frame(width: 60, height: 60) // 光束擴散範圍
+                .frame(width: 100, height: 100) // 增加光束擴散範圍以匹配Apple Maps
                 .rotationEffect(.degrees(safeRotationAngle - 90)) // 向上為0度基準
                 .animation(.easeInOut(duration: 0.25), value: safeRotationAngle)
             
