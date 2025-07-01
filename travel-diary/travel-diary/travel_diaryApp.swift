@@ -12,11 +12,6 @@ struct travel_diaryApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .onAppear {
-                    #if DEBUG
-                    print("🎯 應用啟動完成")
-                    #endif
-                }
         }
     }
 }

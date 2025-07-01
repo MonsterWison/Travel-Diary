@@ -163,9 +163,6 @@ class LocationViewModel: ObservableObject {
         
         // 檢查是否為固定的香港位置
         if isFixedHongKongLocation(location) {
-            #if DEBUG
-            print("🎯 收到固定香港位置")
-            #endif
             currentAddress = "香港新界將軍澳彩明苑彩富閣"
         }
         
@@ -174,9 +171,6 @@ class LocationViewModel: ObservableObject {
         let shouldAutoFollow = !userHasMovedMap || isFirstRealLocation
         
         if shouldAutoFollow {
-            #if DEBUG
-            print("🎯 自動跟隨位置更新: isFirst=\(isFirstRealLocation), userMoved=\(userHasMovedMap)")
-            #endif
             // HIG: 首次位置使用街道級別，後續使用當前縮放級別
             let zoomLevel = isFirstRealLocation ? Self.streetLevelSpan : region.span
             updateMapRegion(to: location.coordinate, span: zoomLevel)
@@ -184,22 +178,12 @@ class LocationViewModel: ObservableObject {
             // 重置用戶移動標記，開始新的自動跟隨
             if userHasMovedMap {
                 userHasMovedMap = false
-                #if DEBUG
-                print("🎯 重置用戶移動標記，恢復自動跟隨")
-                #endif
             }
             
             // 標記已經獲取過真實位置
             if isFirstRealLocation {
                 hasReceivedFirstRealLocation = true
-                #if DEBUG
-                print("🎯 首次真實位置獲取完成，已自動跟隨")
-                #endif
             }
-        } else {
-            #if DEBUG
-            print("🎯 用戶已手動移動地圖，跳過自動跟隨")
-            #endif
         }
         
         // 獲取地址信息（只有在非固定位置時才進行地理編碼）
@@ -240,9 +224,6 @@ class LocationViewModel: ObservableObject {
     private func handleLocationError(_ error: Error?) {
         locationError = error
         if let error = error {
-            #if DEBUG
-            print("🎯 ViewModel 收到位置錯誤: \(error.localizedDescription)")
-            #endif
             currentAddress = "位置獲取失敗: \(error.localizedDescription)"
         }
         updateDebugInfo()
@@ -272,9 +253,6 @@ class LocationViewModel: ObservableObject {
     /// 處理用戶手動移動地圖
     func handleUserMapMovement() {
         guard !isProgrammaticUpdate else { 
-            #if DEBUG
-            print("🎯 跳過程序化地圖更新")
-            #endif
             return 
         }
         
@@ -289,10 +267,6 @@ class LocationViewModel: ObservableObject {
             if latDiff > Self.mapMovementThreshold || lonDiff > Self.mapMovementThreshold {
                 if !userHasMovedMap {
                     userHasMovedMap = true
-                    #if DEBUG
-                    print("🎯 檢測到用戶手動移動地圖，停止自動跟隨")
-                    print("🎯 變化: lat=\(latDiff), lon=\(lonDiff)")
-                    #endif
                 }
                 lastKnownMapCenter = currentMapCenter
             }
@@ -304,9 +278,6 @@ class LocationViewModel: ObservableObject {
     
     // MARK: - Public Methods
     func requestLocationPermission() {
-        #if DEBUG
-        print("🎯 重新請求位置權限，重置首次位置標記")
-        #endif
         hasReceivedFirstRealLocation = false // 重置標記，下次獲取位置時自動跟隨
         locationService.requestLocationPermission()
     }
@@ -327,27 +298,13 @@ class LocationViewModel: ObservableObject {
     
     /// 中心化到當前位置並恢復自動跟隨
     func centerOnCurrentLocation() {
-        #if DEBUG
-        print("🎯 定位按鈕被點擊")
-        #endif
-        
         guard let location = currentLocation else {
-            #if DEBUG
-            print("🎯 沒有當前位置，重新請求位置權限")
-            #endif
             requestLocationPermission()
             return
         }
         
-        #if DEBUG
-        print("🎯 有當前位置，更新地圖區域到: \(location.coordinate)")
-        #endif
-        
         // 重置用戶移動標記，恢復自動跟隨
         userHasMovedMap = false
-        #if DEBUG
-        print("🎯 重置用戶移動標記，恢復自動跟隨")
-        #endif
         
         // HIG: 定位按鈕點擊時使用街道級別縮放
         updateMapRegion(to: location.coordinate, span: Self.streetLevelSpan)
@@ -505,26 +462,11 @@ class LocationViewModel: ObservableObject {
         .sink(
             receiveCompletion: { [weak self] completion in
                 self?.isSearching = false
-                if case .failure(let error) = completion {
-                    #if DEBUG
-                    print("🔍 搜索錯誤: \(error.localizedDescription)")
-                    #endif
-                }
             },
             receiveValue: { [weak self] results in
                 self?.searchResults = results
                 // HIG: 保持搜索界面顯示，無論是否有結果
                 // showingSearchResults 由View層的onChange控制
-                #if DEBUG
-                print("🔍 搜索完成，找到 \(results.count) 個結果")
-                if results.isEmpty {
-                    print("🔍 沒有找到相關結果")
-                } else {
-                    for result in results.prefix(3) {
-                        print("🔍 結果: \(result.name) - \(result.subtitle ?? "無副標題")")
-                    }
-                }
-                #endif
             }
         )
     }
@@ -540,11 +482,6 @@ class LocationViewModel: ObservableObject {
         
         // HIG: 移動地圖到搜索結果位置，使用適當的縮放級別
         moveToLocation(coordinate: result.coordinate, zoomLevel: .neighborhood)
-        
-        #if DEBUG
-        print("🔍 已選擇搜索結果: \(result.name) 位於: \(result.coordinate)")
-        print("🔍 重置用戶移動標記，地圖將跟隨到搜索位置")
-        #endif
     }
     
     // HIG: 立即執行搜索（用於用戶按執行鍵時）
@@ -556,10 +493,6 @@ class LocationViewModel: ObservableObject {
         // 取消debounce，立即搜索
         searchCancellable?.cancel()
         performSearch(query: searchText)
-        
-        #if DEBUG
-        print("🔍 立即搜索: \(searchText)")
-        #endif
     }
     
     // HIG: 清除搜索結果
