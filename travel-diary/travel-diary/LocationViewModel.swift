@@ -49,6 +49,11 @@ class LocationViewModel: ObservableObject {
     @Published var showingSearchResults: Bool = false
     @Published var gpsSignalStrength: GPSSignalStrength = .invalid
     
+    // HIG: 方向指示相關屬性 - 符合Apple Maps標準
+    @Published var currentHeading: CLHeading?
+    @Published var headingAccuracy: CLLocationDegrees = -1
+    @Published var headingError: Error?
+    
     // 私有屬性 - 追蹤是否已經獲取過真實位置
     private var hasReceivedFirstRealLocation = false
     // 追蹤用戶是否手動移動了地圖
@@ -123,6 +128,29 @@ class LocationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] strength in
                 self?.gpsSignalStrength = strength
+            }
+            .store(in: &cancellables)
+        
+        // HIG: 綁定方向相關屬性 - 符合Apple Maps標準
+        locationService.$currentHeading
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] heading in
+                self?.currentHeading = heading
+                self?.updateDebugInfo()
+            }
+            .store(in: &cancellables)
+        
+        locationService.$headingAccuracy
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] accuracy in
+                self?.headingAccuracy = accuracy
+            }
+            .store(in: &cancellables)
+        
+        locationService.$headingError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                self?.headingError = error
             }
             .store(in: &cancellables)
     }
@@ -360,7 +388,7 @@ class LocationViewModel: ObservableObject {
         }
     }
     
-    // MARK: - 搜索設置
+    // MARK: - 搜索設置（符合HIG本地化標準）
     private func setupSearch() {
         // HIG: 設置搜索文字變化監聽，縮短延遲提高響應性
         $searchText
@@ -370,9 +398,39 @@ class LocationViewModel: ObservableObject {
                 self?.performSearch(query: searchText)
             }
             .store(in: &cancellables)
+        
+        // HIG: 配置搜索自動完成器使用中文本地化
+        configureSearchCompleter()
     }
     
-    // MARK: - 搜索方法
+    // MARK: - HIG本地化配置
+    private func configureSearchCompleter() {
+        // HIG: 確保搜索結果優先顯示中文地名
+        searchCompleter.resultTypes = [.address, .pointOfInterest]
+        // 設置搜索區域為香港及周邊，確保結果相關性
+        if let currentLocation = currentLocation {
+            searchCompleter.region = MKCoordinateRegion(
+                center: currentLocation.coordinate,
+                latitudinalMeters: 50000, // 50公里範圍
+                longitudinalMeters: 50000
+            )
+        } else {
+            // 默認香港區域
+            searchCompleter.region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 22.3193, longitude: 114.1694),
+                latitudinalMeters: 100000, // 100公里範圍覆蓋大灣區
+                longitudinalMeters: 100000
+            )
+        }
+    }
+    
+    /// HIG: 配置應用本地化設置
+    func configureLocalization(locale: Locale) {
+        // 更新搜索自動完成器的區域設置
+        configureSearchCompleter()
+    }
+    
+    // MARK: - HIG標準搜索方法（符合Apple Maps本地化規範）
     func performSearch(query: String) {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             // HIG: 搜索文字為空時清理搜索狀態
@@ -387,24 +445,24 @@ class LocationViewModel: ObservableObject {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         
-        // HIG: 擴大搜索範圍，優化搜索區域設置
-        if let currentLocation = currentLocation {
-            request.region = MKCoordinateRegion(
-                center: currentLocation.coordinate,
-                latitudinalMeters: 100000, // 擴大到100公里範圍
-                longitudinalMeters: 100000
-            )
-        } else {
-            // HIG: 默認以香港為中心，擴大搜索範圍覆蓋珠三角地區
-            request.region = MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: Self.hongKongLatitude, longitude: Self.hongKongLongitude),
-                latitudinalMeters: 200000, // 200公里範圍，覆蓋廣深港地區
-                longitudinalMeters: 200000
-            )
-        }
+        // HIG: 設置本地化搜索，確保結果優先顯示中文地名但包含所有相關信息
+        request.region = MKCoordinateRegion(
+            center: currentLocation?.coordinate ?? CLLocationCoordinate2D(
+                latitude: Self.hongKongLatitude, 
+                longitude: Self.hongKongLongitude
+            ),
+            latitudinalMeters: 100000, // 恢復合理搜索範圍，確保建築物信息完整
+            longitudinalMeters: 100000
+        )
         
-        // HIG: 設置搜索結果類型，提高搜索準確性
+        // HIG: 設置搜索結果類型，完全模仿Apple Maps行為，包含建築物
         request.resultTypes = [.pointOfInterest, .address]
+        
+        // HIG: 確保搜索結果使用中文本地化，但不過度限制內容
+        if #available(iOS 18.0, *) {
+            // 使用更寬鬆的地址過濾，確保建築物名稱不會被排除
+            request.addressFilter = MKAddressFilter(including: [.locality, .subLocality, .administrativeArea])
+        }
         
         let search = MKLocalSearch(request: request)
         

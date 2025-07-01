@@ -61,6 +61,11 @@ class LocationService: NSObject, ObservableObject {
     @Published var locationError: Error?
     @Published var gpsSignalStrength: GPSSignalStrength = .invalid
     
+    // HIG: 方向指示功能 - 符合Apple Maps標準
+    @Published var currentHeading: CLHeading?
+    @Published var headingAccuracy: CLLocationDegrees = -1
+    @Published var headingError: Error?
+    
     override init() {
         super.init()
         setupLocationManager()
@@ -73,6 +78,19 @@ class LocationService: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters // 10米精度，更快
         locationManager.distanceFilter = 10 // 10米移動才更新
         
+        // HIG: 方向指示器配置 - 符合Apple Maps標準
+        if CLLocationManager.headingAvailable() {
+            locationManager.headingFilter = 5.0 // 5度變化才更新，避免過於頻繁
+            locationManager.headingOrientation = .portrait // 支持設備方向
+            #if DEBUG
+            print("🧭 設備支援指南針功能")
+            #endif
+        } else {
+            #if DEBUG
+            print("🧭 設備不支援指南針功能")
+            #endif
+        }
+        
         // 獲取當前的授權狀態
         authorizationStatus = locationManager.authorizationStatus
         #if DEBUG
@@ -82,6 +100,7 @@ class LocationService: NSObject, ObservableObject {
         // 如果已經有權限，直接開始位置更新
         if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
             startLocationUpdates()
+            startHeadingUpdates()
         }
     }
     
@@ -147,6 +166,7 @@ class LocationService: NSObject, ObservableObject {
             }
             #else
             startLocationUpdates()
+            startHeadingUpdates()
             #endif
         @unknown default:
             break
@@ -235,8 +255,43 @@ class LocationService: NSObject, ObservableObject {
         print("🎯 停止位置更新")
         #endif
         locationManager.stopUpdatingLocation()
+        stopHeadingUpdates()
         locationUpdateTimer?.invalidate()
         locationUpdateTimer = nil
+    }
+    
+    /// HIG: 開始方向更新 - 符合Apple Maps標準
+    func startHeadingUpdates() {
+        guard CLLocationManager.headingAvailable() else {
+            #if DEBUG
+            print("🧭 設備不支援指南針功能，無法開始方向更新")
+            #endif
+            return
+        }
+        
+        guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+            #if DEBUG
+            print("🧭 權限不足，無法開始方向更新")
+            #endif
+            return
+        }
+        
+        #if DEBUG
+        print("🧭 開始方向更新...")
+        #endif
+        locationManager.startUpdatingHeading()
+    }
+    
+    /// HIG: 停止方向更新
+    func stopHeadingUpdates() {
+        guard CLLocationManager.headingAvailable() else {
+            return
+        }
+        
+        #if DEBUG
+        print("🧭 停止方向更新")
+        #endif
+        locationManager.stopUpdatingHeading()
     }
     
     /// 評估GPS信號強度
@@ -354,6 +409,18 @@ extension LocationService: CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // HIG: 檢查是否為方向更新失敗
+        if let clError = error as? CLError, clError.code == .headingFailure {
+            #if DEBUG
+            print("🧭 方向更新失敗: \(error.localizedDescription)")
+            #endif
+            DispatchQueue.main.async {
+                self.headingError = error
+                self.currentHeading = nil
+            }
+            return
+        }
+        
         #if DEBUG
         print("🎯 位置更新失敗: \(error.localizedDescription)")
         #endif
@@ -440,6 +507,7 @@ extension LocationService: CLLocationManagerDelegate {
                 #endif
                 #else
                 self.startLocationUpdates()
+                self.startHeadingUpdates()
                 #endif
             case .denied, .restricted:
                 #if DEBUG
@@ -456,4 +524,33 @@ extension LocationService: CLLocationManagerDelegate {
             }
         }
     }
+    
+    /// HIG: 方向更新delegate - 符合Apple Maps標準
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        // HIG: 過濾無效的方向數據
+        guard newHeading.headingAccuracy >= 0 else {
+            #if DEBUG
+            print("🧭 方向精度無效，忽略此次更新: \(newHeading.headingAccuracy)")
+            #endif
+            DispatchQueue.main.async {
+                self.headingAccuracy = newHeading.headingAccuracy
+                self.headingError = NSError(domain: "HeadingService", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "指南針精度不足"
+                ])
+            }
+            return
+        }
+        
+        #if DEBUG
+        print("🧭 方向更新: \(newHeading.trueHeading)° (磁方位: \(newHeading.magneticHeading)°), 精度: \(newHeading.headingAccuracy)°")
+        #endif
+        
+        DispatchQueue.main.async {
+            self.currentHeading = newHeading
+            self.headingAccuracy = newHeading.headingAccuracy
+            self.headingError = nil
+        }
+    }
+    
+
 } 
