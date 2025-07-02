@@ -49,6 +49,18 @@ class LocationViewModel: ObservableObject {
     @Published var showingSearchResults: Bool = false
     @Published var gpsSignalStrength: GPSSignalStrength = .invalid
     
+    // MARK: - 附近景點面板屬性
+    @Published var nearbyAttractions: [NearbyAttraction] = []
+    @Published var isLoadingAttractions: Bool = false
+    @Published var isUsingCachedData: Bool = false // 標示是否正在使用緩存數據
+    
+    // HIG: 數據持久化屬性
+    private let attractionsCacheKey = "nearbyAttractionsCache"
+    
+    // HIG: 面板狀態管理（遵循Apple Maps交互設計）
+    @Published var attractionPanelState: AttractionPanelState = .hidden
+    @Published var attractionPanelOffset: CGFloat = 0
+    
     // HIG: 方向指示相關屬性 - 符合Apple Maps標準
     @Published var currentHeading: CLHeading?
     @Published var headingAccuracy: CLLocationDegrees = -1
@@ -94,6 +106,9 @@ class LocationViewModel: ObservableObject {
         bindLocationService()
         setupSearch()
         updateDebugInfo()
+        
+        // 用戶要求：每次打開時景點搜尋器是縮小狀態（compact）
+        attractionPanelState = .compact
         
         // HIG: 立即請求位置權限，不延遲
         requestLocationPermission()
@@ -196,6 +211,14 @@ class LocationViewModel: ObservableObject {
             }
         } else {
             updateDebugInfo()
+        }
+        
+        // HIG: 智能景點搜索觸發邏輯
+        if isFirstRealLocation {
+            searchNearbyAttractions()
+        } else {
+            // 檢查是否需要重新搜索（應用重啟或長時間未搜索時）
+            checkAndTriggerAttractionsSearchIfNeeded()
         }
     }
     
@@ -550,6 +573,640 @@ class LocationViewModel: ObservableObject {
             }
         }
     }
+    
+    // MARK: - MVVM: ViewModel從Model獲取數據
+    /// MVVM架構：ViewModel從Model獲取處理好的景點數據
+    func searchNearbyAttractions() {
+        print("🎯 ViewModel: 開始從Model獲取景點數據...")
+        print("   - 當前位置: \(currentLocation?.coordinate.latitude ?? 0),\(currentLocation?.coordinate.longitude ?? 0)")
+        print("   - 面板狀態: \(attractionPanelState)")
+        
+        guard let location = currentLocation else { 
+            print("❌ 沒有當前位置，搜索取消")
+            return 
+        }
+        
+        guard !isLoadingAttractions else {
+            print("🔍 正在搜索中，跳過重複請求")
+            return
+        }
+        
+        isLoadingAttractions = true
+        print("🔍 ViewModel: 開始從Model獲取數據，面板保持縮小狀態")
+        
+        // MVVM: ViewModel使用Model來處理業務邏輯
+        let attractionsModel = NearbyAttractionsModel()
+        attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                // ViewModel從Model獲取處理好的數據
+                self.nearbyAttractions = processedAttractions
+                self.isLoadingAttractions = false
+                
+                print("✅ ViewModel: 從Model成功獲取 \(processedAttractions.count) 個景點")
+                
+                if !processedAttractions.isEmpty {
+                    // 顯示距離範圍信息
+                    if let nearest = processedAttractions.first, let farthest = processedAttractions.last {
+                        let nearestDistance = nearest.distanceFromUser < 1000 ? 
+                            "\(Int(nearest.distanceFromUser))米" : 
+                            String(format: "%.1fkm", nearest.distanceFromUser/1000)
+                        let farthestDistance = farthest.distanceFromUser < 1000 ? 
+                            "\(Int(farthest.distanceFromUser))米" : 
+                            String(format: "%.1fkm", farthest.distanceFromUser/1000)
+                        print("📏 距離範圍：最近\(nearestDistance) - 最遠\(farthestDistance)")
+                    }
+                    
+                    // MVVM: 標記為實時數據（非緩存）
+                    self.isUsingCachedData = false
+                    
+                    // HIG: 後台自動保存到緩存
+                    self.autoSaveAttractionsToCache()
+                    
+                    // 用戶要求：面板始終保持縮小狀態，更新景點數據
+                    print("🔄 景點搜尋器保持縮小狀態，數據已更新（\(processedAttractions.count)個景點）")
+                    // 確保面板是縮小狀態
+                    if self.attractionPanelState != .compact {
+                        self.attractionPanelState = .compact
+                    }
+                } else {
+                    print("❌ Model返回空數據")
+                    print("📱 沒有景點，保持搜尋器縮小狀態")
+                    
+                    // 用戶要求：沒有景點時保持面板縮小狀態
+                    if self.attractionPanelState != .compact {
+                        self.attractionPanelState = .compact
+                    }
+                    self.isUsingCachedData = false
+                }
+            }
+        }
+    }
+    
+    /// HIG: 檢查並觸發必要的景點搜索（解決應用重啟後面板消失的問題）
+    private func checkAndTriggerAttractionsSearchIfNeeded() {
+        print("🔍 檢查景點搜索條件:")
+        print("   - 有位置: \(currentLocation != nil)")
+        print("   - 景點數據為空: \(nearbyAttractions.isEmpty)")
+        print("   - 搜索中: \(isLoadingAttractions)")
+        print("   - 面板狀態: \(attractionPanelState)")
+        
+        // 更寬鬆的條件：只要有位置且沒在搜索中就觸發
+        guard let _ = currentLocation,
+              !isLoadingAttractions else {
+            print("❌ 不符合搜索條件，跳過觸發")
+            return
+        }
+        
+        // 如果已經有景點數據，確保面板是縮小狀態
+        if !nearbyAttractions.isEmpty {
+            print("✅ 有景點數據，確保面板是縮小狀態")
+            DispatchQueue.main.async {
+                if self.attractionPanelState != .compact {
+                    self.attractionPanelState = .compact
+                }
+            }
+            return
+        }
+        
+        // 如果沒有景點數據，觸發搜索
+        if nearbyAttractions.isEmpty {
+            print("✅ 沒有景點數據，觸發搜索")
+            searchNearbyAttractions()
+        } else if isUsingCachedData {
+            // 如果正在使用緩存數據，觸發後台更新
+            print("🔄 正在使用緩存數據，觸發後台更新")
+            DispatchQueue.global(qos: .utility).async {
+                DispatchQueue.main.async {
+                    self.searchNearbyAttractions()
+                }
+            }
+        } else {
+            print("✅ 已有最新數據，無需搜索")
+        }
+    }
+    
+    /// HIG: 基於MKMapItem的實際POI類型進行正確分類（符合Apple HIG規範）
+    private func getCategoryFromMKMapItem(_ mapItem: MKMapItem, searchQuery: String) -> AttractionCategory {
+        // 1. 首先檢查MKMapItem的pointOfInterestCategory（最準確）
+        if #available(iOS 16.0, *) {
+            if let poiCategory = mapItem.pointOfInterestCategory {
+                switch poiCategory {
+                case .restaurant, .foodMarket, .bakery, .brewery:
+                    return .restaurant
+                case .store, .gasStation:
+                    return .shoppingCenter
+                case .hospital, .pharmacy:
+                    return .other
+                case .school, .university, .library, .museum:
+                    return .museum
+                case .park, .nationalPark, .zoo, .aquarium:
+                    return .park
+                case .beach:
+                    return .park  // 海灘歸類為自然景觀
+                case .amusementPark:
+                    return .amusementPark
+                case .bank, .atm:
+                    return .other
+                case .hotel:
+                    return .other
+                default:
+                    break
+                }
+            }
+        }
+        
+        // 2. 基於景點名稱智能分類（處理中文和英文）
+        let name = mapItem.name?.lowercased() ?? ""
+        
+        // 餐飲類別（包含常見中英文餐廳名稱）
+        if name.contains("restaurant") || name.contains("cafe") || name.contains("coffee") ||
+           name.contains("mcdonald") || name.contains("kfc") || name.contains("starbucks") ||
+           name.contains("餐廳") || name.contains("茶餐廳") || name.contains("酒樓") || name.contains("茶樓") ||
+           name.contains("咖啡") || name.contains("翠華") || name.contains("大家樂") || name.contains("美心") ||
+           name.contains("太平洋咖啡") || name.contains("食") || name.contains("廳") ||
+           name.contains("pizza") || name.contains("burger") || name.contains("subway") ||
+           name.contains("粥") || name.contains("麵") || name.contains("飯") || name.contains("點心") ||
+           name.contains("甜品") || name.contains("燒臘") || name.contains("海鮮") {
+            return .restaurant
+        }
+        
+        // 購物類別
+        if name.contains("shop") || name.contains("store") || name.contains("mall") || name.contains("market") ||
+           name.contains("7-eleven") || name.contains("circle k") || name.contains("ok便利店") ||
+           name.contains("商場") || name.contains("購物") || name.contains("便利店") || name.contains("超市") ||
+           name.contains("商店") || name.contains("百貨") || name.contains("shopping") ||
+           name.contains("惠康") || name.contains("百佳") || name.contains("萬寧") || name.contains("屈臣氏") ||
+           name.contains("街市") || name.contains("市場") {
+            return .shoppingCenter
+        }
+        
+        // 醫療機構
+        if name.contains("hospital") || name.contains("clinic") || name.contains("pharmacy") ||
+           name.contains("醫院") || name.contains("診所") || name.contains("藥房") || name.contains("醫療") {
+            return .other
+        }
+        
+        // 教育機構
+        if name.contains("school") || name.contains("university") || name.contains("college") || name.contains("library") ||
+           name.contains("學校") || name.contains("大學") || name.contains("學院") || name.contains("圖書館") {
+            return .museum
+        }
+        
+        // 公園和自然景觀（包括海灘）
+        if name.contains("park") || name.contains("garden") || name.contains("beach") ||
+           name.contains("公園") || name.contains("花園") || name.contains("海灘") || name.contains("郊野公園") ||
+           name.contains("山") || name.contains("海") || name.contains("自然") {
+            return .park
+        }
+        
+        // 廟宇和宗教場所
+        if name.contains("temple") || name.contains("church") || name.contains("mosque") ||
+           name.contains("廟") || name.contains("寺") || name.contains("教堂") || name.contains("天主教") ||
+           name.contains("佛教") || name.contains("道觀") {
+            return .temple
+        }
+        
+        // 博物館和文化場所
+        if name.contains("museum") || name.contains("gallery") || name.contains("cultural") ||
+           name.contains("博物館") || name.contains("美術館") || name.contains("文化") || name.contains("藝術") {
+            return .museum
+        }
+        
+        // 娛樂場所
+        if name.contains("cinema") || name.contains("theater") || name.contains("entertainment") ||
+           name.contains("電影") || name.contains("戲院") || name.contains("劇院") || name.contains("娛樂") {
+            return .amusementPark
+        }
+        
+        // 觀景台和地標
+        if name.contains("viewpoint") || name.contains("observation") || name.contains("peak") ||
+           name.contains("觀景") || name.contains("山頂") || name.contains("天橋") || name.contains("地標") {
+            return .viewpoint
+        }
+        
+        // 歷史古蹟
+        if name.contains("heritage") || name.contains("historic") || name.contains("monument") ||
+           name.contains("古蹟") || name.contains("歷史") || name.contains("古建築") || name.contains("文物") {
+            return .historicalSite
+        }
+        
+        // 3. 作為fallback，使用搜索關鍵詞分類
+        return getCategoryFromQuery(searchQuery)
+    }
+    
+    /// HIG: 從搜索查詢推斷景點類別（作為fallback方法）
+    private func getCategoryFromQuery(_ query: String) -> AttractionCategory {
+        let lowercaseQuery = query.lowercased()
+        
+        // 餐飲類 (全球通用)
+        if ["restaurant", "cafe", "coffee shop", "麥當勞", "肯德基", "星巴克", "必勝客", "漢堡王",
+            "mcdonald's", "kfc", "starbucks", "pizza hut", "burger king", "subway",
+            "餐廳", "咖啡廳", "茶餐廳", "食店", "小食店", "快餐店"].contains(lowercaseQuery) {
+            return .restaurant
+        }
+        
+        // 購物類 (全球通用)
+        if ["shopping mall", "supermarket", "grocery store", "convenience store", "store", "shop", "market",
+            "7-eleven", "shell", "bp", "exxon", "chevron",
+            "商店", "便利店", "超市", "購物中心", "商場", "市場", "百貨公司"].contains(lowercaseQuery) {
+            return .shoppingCenter
+        }
+        
+        // 自然景觀類 (全球通用)
+        if ["park", "beach", "mountain", "lake", "river", "forest", "nature reserve", "national park",
+            "botanical garden", "zoo", "aquarium",
+            "公園", "海灘", "山", "湖", "河", "森林", "自然保護區", "國家公園", "植物園", "動物園", "水族館"].contains(lowercaseQuery) {
+            return .park
+        }
+        
+        // 文化教育類 (全球通用)
+        if ["museum", "art gallery", "cultural center", "exhibition hall", "library", "school", "university",
+            "博物館", "美術館", "文化中心", "展覽館", "圖書館", "學校", "大學"].contains(lowercaseQuery) {
+            return .museum
+        }
+        
+        // 宗教類 (全球通用)
+        if ["church", "cathedral", "mosque", "temple", "synagogue", "shrine", "monastery", "abbey", "chapel",
+            "教堂", "清真寺", "寺廟", "廟宇", "道觀", "神社", "修道院"].contains(lowercaseQuery) {
+            return .temple
+        }
+        
+        // 娛樂類 (全球通用)
+        if ["amusement park", "theme park", "entertainment center", "cinema", "theater", "concert hall",
+            "opera house", "stadium", "arena", "bowling alley", "arcade",
+            "遊樂園", "主題公園", "娛樂中心", "電影院", "劇院", "音樂廳", "體育場", "保齡球館"].contains(lowercaseQuery) {
+            return .amusementPark
+        }
+        
+        // 觀景地點 (全球通用)
+        if ["viewpoint", "observation deck", "scenic spot", "landmark", "monument",
+            "觀景台", "風景區", "地標", "名勝"].contains(lowercaseQuery) {
+            return .viewpoint
+        }
+        
+        // 旅遊景點 (全球通用)
+        if ["tourist attraction", "sightseeing", "point of interest", "heritage site", "palace", "castle",
+            "旅遊景點", "觀光", "景點", "宮殿", "古建築"].contains(lowercaseQuery) {
+            return .historicalSite
+        }
+        
+        // 醫療服務 (全球通用)
+        if ["hospital", "clinic", "dental clinic", "pharmacy",
+            "醫院", "診所", "藥房"].contains(lowercaseQuery) {
+            return .other
+        }
+        
+        // 交通及其他服務 (全球通用)
+        if ["gas station", "bank", "atm", "post office", "police station", "fire station",
+            "加油站", "銀行", "ATM", "郵局", "警察局", "消防局"].contains(lowercaseQuery) {
+            return .other
+        }
+        
+        // 預設分類
+        return .other
+    }
+    
+    /// 聚焦到指定景點
+    func focusOnAttraction(_ attraction: NearbyAttraction) {
+        let coordinate = CLLocationCoordinate2D(
+            latitude: attraction.coordinate.latitude,
+            longitude: attraction.coordinate.longitude
+        )
+        moveToLocation(coordinate: coordinate, zoomLevel: .neighborhood)
+    }
+    
+    // MARK: - HIG面板狀態管理方法
+    
+    /// 根據拖拽手勢更新面板位置（拖拽過程中只更新位置，不切換狀態）
+    func updatePanelState(dragValue: DragGesture.Value, screenHeight: CGFloat) {
+        let dragOffset = dragValue.translation.height
+        
+        // HIG: 在拖拽過程中只更新偏移量，不切換狀態
+        switch attractionPanelState {
+        case .compact:
+            // 緊湊模式：可以向上拖拽到展開，向下拖拽到隱藏
+            attractionPanelOffset = max(-200, min(100, dragOffset))
+        case .expanded:
+            // 展開模式：只允許向下拖拽到緊湊或隱藏
+            attractionPanelOffset = max(-50, min(300, dragOffset))
+        case .hidden:
+            // 隱藏模式：只允許向上拖拽到緊湊
+            attractionPanelOffset = max(-150, min(50, dragOffset))
+        }
+    }
+    
+    /// 完成拖拽手勢時的處理 - HIG標準Apple Maps狀態切換邏輯
+    func finalizePanelState(dragValue: DragGesture.Value) {
+        let dragOffset = dragValue.translation.height
+        let velocity = dragValue.predictedEndTranslation.height - dragValue.translation.height
+        
+        var newState = attractionPanelState
+        
+        // HIG: Apple Maps標準狀態切換邏輯
+        if abs(velocity) > 400 { // 快速手勢
+            if velocity > 0 { // 快速向下拖拽
+                switch attractionPanelState {
+                case .expanded:
+                    newState = .compact  // 展開→緊湊
+                case .compact:
+                    newState = .hidden   // 緊湊→隱藏
+                case .hidden:
+                    break
+                }
+            } else { // 快速向上拖拽
+                switch attractionPanelState {
+                case .hidden:
+                    newState = .compact   // 隱藏→緊湊
+                case .compact:
+                    newState = .expanded  // 緊湊→展開
+                case .expanded:
+                    break
+                }
+            }
+        } else { // 根據拖拽距離判斷
+            switch attractionPanelState {
+            case .hidden:
+                if dragOffset < -50 { // 向上拖拽超過50pt
+                    newState = .compact
+                }
+            case .compact:
+                if dragOffset > 50 { // 向下拖拽超過50pt
+                    newState = .hidden
+                } else if dragOffset < -80 { // 向上拖拽超過80pt
+                    newState = .expanded
+                }
+            case .expanded:
+                if dragOffset > 100 { // 向下拖拽超過100pt
+                    newState = .compact
+                }
+            }
+        }
+        
+        // HIG: 使用平滑動畫切換狀態
+        withAnimation(.easeOut(duration: 0.4)) {
+            attractionPanelState = newState
+            attractionPanelOffset = 0 // 重置偏移量
+        }
+    }
+    
+    /// 隱藏景點面板
+    func hideAttractionPanel() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            attractionPanelState = .hidden
+            attractionPanelOffset = 0
+        }
+    }
+    
+    /// 用戶要求：每次打開apps時自動搜尋幾十米至50km範圍內50個景點（公開方法供View調用）
+    func autoSearchAttractionsOnAppStart() {
+        print("🚀 應用啟動自動搜尋景點（全球適用）- 範圍：幾十米至50km，數量：50個，排序：由近至遠")
+        
+        // 用戶要求：面板始終保持縮小狀態
+        print("📱 景點面板保持縮小狀態")
+        
+        // 檢查位置服務狀態
+        if currentLocation == nil {
+            print("⚠️ 沒有當前位置，啟動位置服務並延遲搜尋")
+            locationService.requestLocationPermission()
+            locationService.startLocationUpdates()
+            
+            // 延遲搜尋，等待位置更新
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if let location = self.currentLocation {
+                    print("📍 位置已獲取，開始搜尋幾十米至50km範圍內景點")
+                    print("📍 當前位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                    self.searchNearbyAttractions()
+                } else {
+                    print("⚠️ 仍然沒有位置，稍後再試")
+                    // 再次嘗試
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        if let location = self.currentLocation {
+                            print("📍 延遲位置已獲取，開始搜尋景點")
+                            print("📍 當前位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                            self.searchNearbyAttractions()
+                        } else {
+                            print("❌ 無法獲取位置，景點搜尋暫停")
+                        }
+                    }
+                }
+            }
+        } else {
+            print("📍 已有位置，立即搜尋景點")
+            print("📍 當前位置: \(currentLocation!.coordinate.latitude), \(currentLocation!.coordinate.longitude)")
+            print("🔍 開始執行景點搜索...")
+            // 立即搜尋景點
+            searchNearbyAttractions()
+            print("✅ 搜索方法已調用")
+        }
+    }
+    
+    /// HIG: 應用恢復時檢查並觸發必要的搜索（公開方法供View調用）
+    func checkAttractionsOnAppResume() {
+        print("📱 應用恢復檢查")
+        
+        // 檢查位置服務狀態
+        if currentLocation == nil {
+            print("⚠️ 沒有當前位置，重新啟動位置服務")
+            locationService.requestLocationPermission()
+            locationService.startLocationUpdates()
+            return
+        }
+        
+        checkAndTriggerAttractionsSearchIfNeeded()
+    }
+    
+    // MARK: - MVVM & HIG 緩存持久化方法
+    
+    /// MVVM & HIG: 自動保存景點數據到緩存（符合Apple數據持久化規範）
+    private func autoSaveAttractionsToCache() {
+        // HIG: 後台靜默保存，不阻塞UI
+        DispatchQueue.global(qos: .utility).async {
+            self.saveAttractionsToCache()
+        }
+    }
+    
+    /// HIG: 保存景點數據到緩存（提供離線體驗）
+    func saveAttractionsToCache() {
+        print("🔄 === 開始保存景點數據到緩存 ===")
+        
+        guard !nearbyAttractions.isEmpty else {
+            print("💾 跳過保存：沒有景點數據")
+            return
+        }
+        
+        guard let currentLocation = currentLocation else {
+            print("💾 跳過保存：沒有當前位置")
+            return
+        }
+        
+        print("📍 保存位置: \(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)")
+        print("🎯 保存景點數量: \(nearbyAttractions.count)")
+        print("📊 使用緩存狀態: \(isUsingCachedData)")
+        print("📱 當前面板狀態: \(attractionPanelState)")
+        
+        // 將面板狀態轉換為字符串
+        let panelStateString: String
+        switch attractionPanelState {
+        case .hidden: panelStateString = "hidden"
+        case .compact: panelStateString = "compact"
+        case .expanded: panelStateString = "expanded"
+        }
+        
+        let cache = NearbyAttractionsCache(
+            attractions: nearbyAttractions,
+            lastUserLocation: AttractionsCoordinate(from: currentLocation.coordinate),
+            searchRadius: 50000, // 50km
+            maxResults: 50,
+            panelState: panelStateString
+        )
+        
+        do {
+            let data = try JSONEncoder().encode(cache)
+            UserDefaults.standard.set(data, forKey: attractionsCacheKey)
+            
+            // HIG: 立即同步確保數據安全
+            UserDefaults.standard.synchronize()
+            
+            print("✅ 成功保存 \(nearbyAttractions.count) 個景點到緩存")
+            print("📊 緩存數據大小: \(data.count) bytes")
+            print("🔑 緩存Key: \(attractionsCacheKey)")
+            print("⏰ 保存時間: \(Date())")
+            
+            // 即時驗證緩存完整性
+            self.verifyCacheIntegrity()
+            
+        } catch {
+            print("❌ 保存緩存失敗: \(error.localizedDescription)")
+            print("🔍 錯誤詳情: \(error)")
+        }
+        
+        print("🔄 === 緩存保存完成 ===")
+    }
+    
+    /// MVVM & HIG: 驗證緩存完整性
+    private func verifyCacheIntegrity() {
+        if let data = UserDefaults.standard.data(forKey: attractionsCacheKey) {
+            do {
+                let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
+                print("✅ 緩存驗證成功: \(cache.attractions.count) 個景點")
+            } catch {
+                print("❌ 緩存驗證失敗: \(error)")
+            }
+        } else {
+            print("❌ 緩存驗證失敗: 無法讀取數據")
+        }
+    }
+    
+    /// MVVM & HIG: 從緩存加載景點數據（立即響應用戶）
+    func loadAttractionsFromCache() {
+        print("🔄 === 開始加載緩存景點數據 ===")
+        
+        guard let data = UserDefaults.standard.data(forKey: attractionsCacheKey) else {
+            print("💾 沒有找到緩存數據（Key: \(attractionsCacheKey)）")
+            print("🔄 === 緩存加載結束（無數據）===")
+            return
+        }
+        
+        print("📊 找到緩存數據，大小: \(data.count) bytes")
+        
+        do {
+            let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
+            print("✅ 成功解碼緩存數據")
+            print("📍 緩存位置: \(cache.lastUserLocation.latitude), \(cache.lastUserLocation.longitude)")
+            print("⏰ 緩存時間: \(cache.lastUpdated)")
+            print("🎯 景點數量: \(cache.attractions.count)")
+            
+            let cacheAge = Date().timeIntervalSince(cache.lastUpdated)
+            print("📅 緩存年齡: \(String(format: "%.1f", cacheAge/3600)) 小時")
+            
+            // 檢查緩存是否過期（6小時 = 21600秒）
+            if cache.isExpired(maxAge: 21600) {
+                print("💾 緩存已過期，清理並跳過加載")
+                clearExpiredCache()
+                print("🔄 === 緩存加載結束（已過期）===")
+                return
+            }
+            
+            print("🎉 緩存數據有效，立即加載到UI")
+            print("🔄 開始更新ViewModel狀態...")
+            
+            // MVVM: 在主線程更新UI綁定的數據
+            DispatchQueue.main.async {
+                // 立即加載緩存數據
+                self.nearbyAttractions = cache.sortedAttractions
+                self.isUsingCachedData = true
+                
+                print("✅ ViewModel狀態已更新")
+                print("   - 景點數量: \(self.nearbyAttractions.count)")
+                print("   - 使用緩存: \(self.isUsingCachedData)")
+                print("💾 緩存面板狀態: \(cache.panelState)")
+                
+                // 用戶要求：每次打開時面板都是縮小狀態，不管緩存中保存的是什麼狀態
+                if !cache.attractions.isEmpty {
+                    print("🚀 確保景點面板始終為縮小狀態（用戶要求）")
+                    // 始終設置為compact狀態
+                    self.attractionPanelState = .compact
+                    print("📱 面板狀態已設置為縮小狀態: \(self.attractionPanelState)")
+                } else {
+                    print("⚠️ 緩存中沒有景點數據，保持縮小狀態")
+                    self.attractionPanelState = .compact
+                }
+            }
+            
+        } catch {
+            print("❌ 加載緩存失敗: \(error.localizedDescription)")
+            print("🔍 錯誤詳情: \(error)")
+        }
+        
+        print("🔄 === 緩存加載完成 ===")
+    }
+    
+    /// HIG: 清除過期緩存數據
+    private func clearExpiredCache() {
+        UserDefaults.standard.removeObject(forKey: attractionsCacheKey)
+        print("🗑️ 已清除過期緩存")
+    }
+    
+    /// MVVM & HIG: 調試用 - 檢查緩存狀態
+    func debugCacheStatus() {
+        print("🔍 === 緩存狀態調試 ===")
+        print("🔑 緩存Key: \(attractionsCacheKey)")
+        
+        if let data = UserDefaults.standard.data(forKey: attractionsCacheKey) {
+            print("📊 找到緩存數據，大小: \(data.count) bytes")
+            
+            do {
+                let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
+                print("✅ 緩存解碼成功")
+                print("📍 緩存位置: \(cache.lastUserLocation.latitude), \(cache.lastUserLocation.longitude)")
+                print("⏰ 緩存時間: \(cache.lastUpdated)")
+                print("🎯 景點數量: \(cache.attractions.count)")
+                print("📱 緩存面板狀態: \(cache.panelState)")
+                print("⏳ 緩存年齡: \(Date().timeIntervalSince(cache.lastUpdated)/3600) 小時")
+                print("✨ 緩存狀態: \(cache.isExpired(maxAge: 21600) ? "已過期" : "有效")")
+                
+                if !cache.attractions.isEmpty {
+                    print("🎪 前3個景點:")
+                    for (index, attraction) in cache.attractions.prefix(3).enumerated() {
+                        print("   \(index + 1). \(attraction.name) - \(attraction.distanceFromUser)m")
+                    }
+                }
+            } catch {
+                print("❌ 緩存解碼失敗: \(error)")
+            }
+        } else {
+            print("💾 沒有找到緩存數據")
+        }
+        
+        print("🎯 當前ViewModel狀態:")
+        print("   - 景點數量: \(nearbyAttractions.count)")
+        print("   - 使用緩存: \(isUsingCachedData)")
+        print("   - 面板狀態: \(attractionPanelState)")
+        print("   - 載入中: \(isLoadingAttractions)")
+        print("🔍 === 調試結束 ===")
+    }
 }
 
 // MARK: - TravelPoint Model
@@ -561,6 +1218,29 @@ struct TravelPoint: Identifiable, Equatable {
     
     static func == (lhs: TravelPoint, rhs: TravelPoint) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+// MARK: - HIG面板狀態枚舉（遵循Apple Maps設計）
+enum AttractionPanelState {
+    case hidden     // 完全隱藏
+    case compact    // 緊湊顯示（底部小條）
+    case expanded   // 展開顯示（半屏）
+    
+    var heightMultiplier: CGFloat {
+        switch self {
+        case .hidden: return 0
+        case .compact: return 0.15  // 減小到15%，更像Apple Maps
+        case .expanded: return 0.6  // 增加到60%，更接近Apple Maps
+        }
+    }
+    
+    var visibleHeight: CGFloat {
+        switch self {
+        case .hidden: return 0
+        case .compact: return 80    // 固定80pt高度，像Apple Maps
+        case .expanded: return UIScreen.main.bounds.height * 0.6
+        }
     }
 }
 

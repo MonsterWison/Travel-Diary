@@ -7,6 +7,7 @@ struct TravelMapView: View {
     @State private var showingAddPointAlert = false
     @State private var cameraPosition = MapCameraPosition.automatic
     @FocusState private var isSearchFocused: Bool
+    @State private var attractionCheckTimer: Timer?
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -87,9 +88,13 @@ struct TravelMapView: View {
                     bottomActionButtons
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 34) // 考慮Home Indicator
-            }
-            .navigationTitle("旅遊日誌")
+                .padding(.bottom, calculateBottomPadding())
+                .animation(.easeOut(duration: 0.3), value: viewModel.attractionPanelState)
+            
+            // MARK: - Apple Maps風格拖拽面板
+            attractionDraggablePanel
+        }
+        .navigationTitle("旅遊日誌")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -105,8 +110,24 @@ struct TravelMapView: View {
         }
         .onAppear {
             setupInitialMapPosition()
+            // 用戶要求：每次打開時景點搜尋器應該是縮小狀態
+            // viewModel.attractionPanelState 已在ViewModel初始化時設為 .compact
+            // 用戶要求：每次打開apps都自動搜尋幾十米至50km範圍內50個景點（全球所有國家及地區適用）
+            viewModel.loadAttractionsFromCache()  // 先加載緩存提供即時體驗
+            viewModel.autoSearchAttractionsOnAppStart()  // 自動搜尋最新景點
             // HIG: 確保應用本地化設置正確
             configureMapLocalization()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // HIG: 應用進入前台時檢查並觸發必要的搜索
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                viewModel.checkAttractionsOnAppResume()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            // HIG: 應用進入後台時自動保存緩存數據
+            print("🔄 應用進入後台，保存景點緩存")
+            viewModel.saveAttractionsToCache()
         }
         .onReceive(viewModel.$region) { newRegion in
             updateCameraPosition(newRegion)
@@ -505,6 +526,13 @@ struct TravelMapView: View {
     // MARK: - 工具欄菜單
     private var menuButton: some View {
         Menu {
+            Button(action: {
+                viewModel.searchNearbyAttractions()
+            }) {
+                Label("搜索附近景點", systemImage: "binoculars")
+            }
+            .disabled(viewModel.currentLocation == nil || viewModel.isLoadingAttractions)
+            
             Button(action: viewModel.clearSearch) {
                 Label("清除搜索", systemImage: "magnifyingglass.circle")
             }
@@ -623,11 +651,234 @@ struct TravelMapView: View {
         Button("取消", role: .cancel) { }
     }
     
+    // MARK: - Apple Maps風格可拖拽景點面板
+    private var attractionDraggablePanel: some View {
+        GeometryReader { geometry in
+            let screenHeight = geometry.size.height
+            let panelHeight: CGFloat = {
+                switch viewModel.attractionPanelState {
+                case .hidden: return 80  // 用戶要求：永遠顯示景點搜尋器（縮小狀態）
+                case .compact: return 80  // 固定高度，像Apple Maps
+                case .expanded: return screenHeight * 0.6
+                }
+            }()
+            
+            VStack(spacing: 0) {
+                // 用戶要求：永遠顯示景點搜尋器面板
+                appleMapsPanelContent
+            }
+            .frame(height: max(panelHeight, 0))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+            .offset(y: screenHeight - panelHeight + viewModel.attractionPanelOffset)
+            .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), value: viewModel.attractionPanelState)
+            .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), value: viewModel.attractionPanelOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        viewModel.updatePanelState(dragValue: value, screenHeight: screenHeight)
+                    }
+                    .onEnded { value in
+                        viewModel.finalizePanelState(dragValue: value)
+                    }
+            )
+        }
+        .ignoresSafeArea(.all, edges: .bottom)
+    }
+    
+    // MARK: - Apple Maps風格面板內容
+    private var appleMapsPanelContent: some View {
+        VStack(spacing: 0) {
+            // HIG: 拖拽指示器區域（較大的觸摸區域）
+            VStack(spacing: 4) {
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.primary.opacity(0.3))
+                    .frame(width: 40, height: 5)
+                    .padding(.top, 8)
+                
+                if viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden {
+                    // 用戶要求：hidden狀態也顯示緊湊內容
+                    compactModeContent
+                } else {
+                    // 標題文字
+                    Text("附近景點")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .padding(.top, 4)
+                }
+            }
+            .frame(height: (viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden) ? 80 : 60)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle()) // 擴大觸摸區域
+            
+            // 展開模式的內容
+            if viewModel.attractionPanelState == .expanded {
+                expandedModeContent
+            }
+        }
+    }
+    
+    // MARK: - 緊湊模式內容（Apple Maps風格）
+    private var compactModeContent: some View {
+        HStack {
+            // 左側圖標和文字
+            HStack(spacing: 8) {
+                Image(systemName: "location.magnifyingglass")
+                    .font(.title3)
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("附近景點")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    if viewModel.isLoadingAttractions {
+                        HStack(spacing: 4) {
+                            if viewModel.isUsingCachedData {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                            Text(viewModel.isUsingCachedData ? "更新中..." : "搜索50km範圍內...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else if viewModel.isUsingCachedData {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                            Text("\(viewModel.nearbyAttractions.count) 個地點（緩存數據）")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Text("\(viewModel.nearbyAttractions.count) 個地點（50km內）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // 右側載入指示器或箭頭
+            if viewModel.isLoadingAttractions {
+                ProgressView()
+                    .scaleEffect(0.8)
+            } else {
+                Image(systemName: "chevron.up")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+    }
+    
+    // MARK: - 展開模式內容
+    private var expandedModeContent: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            LazyVStack(spacing: 12) {
+                if viewModel.nearbyAttractions.isEmpty && !viewModel.isLoadingAttractions {
+                    // 空狀態
+                    VStack(spacing: 16) {
+                        Image(systemName: "location.magnifyingglass")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        
+                        Text("附近沒有找到景點")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        Text("嘗試移動到其他區域搜索")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
+                } else {
+                    ForEach(viewModel.nearbyAttractions) { attraction in
+                        ExpandedAttractionCard(attraction: attraction)
+                            .onTapGesture {
+                                viewModel.focusOnAttraction(attraction)
+                            }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 34) // 考慮Home Indicator
+        }
+        .frame(maxHeight: .infinity)
+    }
+    
+
+    
+    // MARK: - 底部按鈕位置計算
+    private func calculateBottomPadding() -> CGFloat {
+        let basePadding: CGFloat = 34 // Home Indicator安全區域
+        
+        switch viewModel.attractionPanelState {
+        case .hidden:
+            return basePadding
+        case .compact:
+            return basePadding + 80 + 16  // 固定80pt + 間距
+        case .expanded:
+            return basePadding + (UIScreen.main.bounds.height * 0.6) + 16
+        }
+    }
+    
     // MARK: - HIG本地化配置
     private func configureMapLocalization() {
         // HIG: 確保地圖本地化設置符合Apple Maps標準
         // 設置地圖語言偏好為中文（香港），以確保地名顯示為中文
         viewModel.configureLocalization(locale: Locale(identifier: "zh-HK"))
+    }
+    
+    // MARK: - HIG景點面板檢查機制
+    
+    /// 開始定期檢查景點搜索狀態
+    private func startPeriodicAttractionCheck() {
+        // 停止現有定時器
+        attractionCheckTimer?.invalidate()
+        
+        print("⏰ 開始定期檢查景點搜索狀態")
+        
+        // 創建新定時器，每2秒檢查一次，持續30秒
+        var checkCount = 0
+        attractionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { timer in
+            checkCount += 1
+            print("🔍 定期檢查 #\(checkCount)")
+            
+            // 檢查並觸發搜索
+            viewModel.checkAttractionsOnAppResume()
+            
+            // 強制備用機制：如果檢查5次後仍然沒有景點，且有位置，強制觸發搜索
+            if checkCount == 5 && viewModel.nearbyAttractions.isEmpty && viewModel.currentLocation != nil {
+                print("🚨 強制觸發景點搜索（備用機制）")
+                viewModel.searchNearbyAttractions()
+            }
+            
+            // 超級強制機制：如果檢查10次後仍然沒有面板顯示，強制顯示
+            if checkCount == 10 && !viewModel.nearbyAttractions.isEmpty && viewModel.attractionPanelState == .hidden {
+                print("🚨 強制顯示景點面板（超級備用機制）")
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.6)) {
+                        viewModel.attractionPanelState = .compact
+                    }
+                }
+            }
+            
+            // 如果已經有景點且面板顯示，或檢查超過15次（30秒），停止定時器
+            if ((!viewModel.nearbyAttractions.isEmpty && viewModel.attractionPanelState != .hidden) || checkCount >= 15) {
+                print("✅ 定期檢查完成，景點數量: \(viewModel.nearbyAttractions.count)，面板狀態: \(viewModel.attractionPanelState)")
+                timer.invalidate()
+            }
+        }
     }
 }
 
@@ -893,6 +1144,175 @@ struct SearchResultAnnotation: View {
         }
     }
 }
+
+// MARK: - 簡單景點卡片（保留向後兼容）
+struct SimpleAttractionCard: View {
+    let attraction: NearbyAttraction
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 景點圖標
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(attraction.category.color.opacity(0.15))
+                    .frame(width: 80, height: 50)
+                
+                Image(systemName: attraction.category.iconName)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(attraction.category.color)
+            }
+            
+            // 景點信息
+            VStack(alignment: .leading, spacing: 2) {
+                Text(attraction.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                Text("\(Int(attraction.distanceFromUser))m")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(width: 80)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        )
+    }
+}
+
+// MARK: - HIG緊湊模式景點卡片（Apple Maps風格）
+struct CompactAttractionCard: View {
+    let attraction: NearbyAttraction
+    
+    private var distanceText: String {
+        let distance = attraction.distanceFromUser
+        if distance < 1000 {
+            return "\(Int(distance))m"
+        } else {
+            return String(format: "%.1fkm", distance / 1000)
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // HIG: 景點圖標區域
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(attraction.category.color.opacity(0.12))
+                    .frame(width: 100, height: 60)
+                
+                Image(systemName: attraction.category.iconName)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(attraction.category.color)
+            }
+            
+            // HIG: 景點信息區域
+            VStack(alignment: .leading, spacing: 4) {
+                Text(attraction.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                HStack {
+                    Text(attraction.category.displayName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Text(distanceText)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .frame(width: 100)
+        .padding(8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - HIG展開模式景點卡片（Apple Maps風格）
+struct ExpandedAttractionCard: View {
+    let attraction: NearbyAttraction
+    
+    private var distanceText: String {
+        let distance = attraction.distanceFromUser
+        if distance < 1000 {
+            return "\(Int(distance))m"
+        } else {
+            return String(format: "%.1fkm", distance / 1000)
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // HIG: 景點圖標
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(attraction.category.color.opacity(0.12))
+                    .frame(width: 60, height: 60)
+                
+                Image(systemName: attraction.category.iconName)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(attraction.category.color)
+            }
+            
+            // HIG: 景點詳細信息
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(attraction.name)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                    
+                    Spacer()
+                    
+                    Text(distanceText)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                }
+                
+                HStack {
+                    Text(attraction.category.displayName)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                }
+                
+                if let address = attraction.address, !address.isEmpty {
+                    Text(address)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            
+            // HIG: 箭頭指示器
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.gray)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 1)
+    }
+}
+
+
 
 // MARK: - Preview
 #Preview {

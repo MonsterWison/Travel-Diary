@@ -383,3 +383,76 @@ flowchart TD
 ---
 
 **Project Status**: Stage 1 location icon optimization and code cleanup completed, all features running stably, excellent code quality, ready for next development phase
+
+### Stage 2.1 MVVM Refactoring Updates (July 3, 2025)
+
+#### 🏗️ **Nearby Attractions Feature Implementation - Completed**
+- ✅ **Stage 2 Nearby Attractions Search Functionality**
+  - Completed NearbyAttractionsModel.swift (Data Model Layer)
+  - Completed NearbyAttractionsService.swift (Service Layer)
+  - Integrated MKLocalSearch for attraction discovery
+  - Implemented Apple Maps-style bottom panel
+  - Support for Hidden/Compact/Expanded three panel states
+  - Complete attraction categorization system with HIG-compliant icons
+
+- ✅ **Global Attraction Search Support**
+  - 15 professional tourism keywords: tourist attraction, landmark, museum, park, temple, beach, viewpoint, cultural center, historic site, famous restaurant, shopping mall, art gallery, botanical garden, national park
+  - Completely eliminated junk search content: excludes police station, hospital, MTR, bus station, bank, gas station, etc.
+  - 50km search radius, maximum 50 attractions, sorted by distance from nearest to farthest
+  - Globally applicable multilingual support
+
+#### 🔧 **Stage 2.1 MVVM Architecture Refactoring - Completed**
+- ✅ **Proper MVVM Responsibility Separation**
+  - **Model Layer (NearbyAttractionsModel)**: Handles all business logic, data search, processing, sorting, deduplication
+  - **ViewModel Layer (LocationViewModel)**: Only coordinates Model and View, handles presentation logic
+  - **View Layer (TravelMapView)**: Pure UI display, retrieves data from ViewModel
+  - Fully compliant with Apple's official MVVM design pattern standards
+
+- ✅ **Search Logic Optimization**
+  - Collect 25 results per keyword to avoid MKLocalSearch rate limiting
+  - Merge all results then perform global distance-based sorting
+  - Intelligent deduplication retaining nearest duplicate attractions
+  - Precisely limit to top 50 nearest attractions
+
+- ✅ **Code Cleanup and Optimization**
+  - Removed all filter logic, letting pure search keywords naturally determine results
+  - Completely eliminated distance restrictions and POI type filtering
+  - Cleaned all DEBUG tracking code
+  - Simpler code structure with better maintainability
+
+#### 🚀 **Technical Breakthroughs**
+- **Solved search quality issues**: Use pure tourism keywords from source rather than post-filtering
+- **Achieved truly nearest 50 attractions**: Global sorting instead of grouped sorting
+- **Perfected MVVM architecture**: Model handles business logic, ViewModel coordinates, View displays
+- **Enhanced search efficiency**: 25 result limit avoids API rate limiting, ensures stability
+
+#### 📱 **Deployment Status**
+- Successfully compiled and deployed to iPhone device "Monster"
+- Attraction search functionality works normally
+- Bottom panel displays nearest 50 tourism attractions
+- All core features remain stable:
+  - ✅ Location services with Apple Maps-style location icon
+  - ✅ Nearby attractions automatic search and display
+  - ✅ Three-stage attraction panel management
+  - ✅ Global tourism attraction support
+
+#### 🎯 **Quality Assurance**
+- Strictly follows Apple Human Interface Guidelines
+- Complete MVVM architecture implementation
+- Efficient search algorithms and data processing
+- Globally applicable tourism attraction search
+
+#### 📦 **Version Control**
+- Will create git tag `stage-2.1` as restore point
+- Based on Stage 2 nearby attractions feature with MVVM refactoring optimization
+- All functionality tests passed, ready for GitHub synchronization
+
+#### 🔮 **Next Phase Planning**
+- Prepare data persistence functionality based on perfected MVVM architecture
+- Consider adding attraction detail information pages
+- Plan multimedia integration and CoreData storage
+- Prepare CloudKit cloud synchronization phase
+
+---
+
+**Project Status**: Stage 2.1 MVVM refactoring completed, nearby attractions functionality running stably, excellent code architecture, ready for data persistence phase

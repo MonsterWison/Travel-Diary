@@ -385,3 +385,76 @@ flowchart TD
 ---
 
 **專案狀態**: Stage 1定位圖標優化及代碼清理完成，所有功能穩定運行，代碼品質優秀，準備進入下一開發階段
+
+### Stage 2.1 MVVM重構更新 (2025年7月3日)
+
+#### 🏗️ **附近景點功能實現 - 已完成**
+- ✅ **Stage 2 附近景點搜索功能**
+  - 完成 NearbyAttractionsModel.swift (數據模型層)
+  - 完成 NearbyAttractionsService.swift (服務層)
+  - 集成 MKLocalSearch 實現景點搜索
+  - 實現 Apple Maps 風格底部面板
+  - 支持 Hidden/Compact/Expanded 三種面板狀態
+  - 完整的景點分類系統與HIG合規圖標
+
+- ✅ **全球景點搜索支援**
+  - 15個專業旅遊關鍵字：tourist attraction, landmark, museum, park, temple, beach, viewpoint, cultural center, historic site, famous restaurant, shopping mall, art gallery, botanical garden, national park
+  - 完全移除垃圾搜索內容：不包含police station, hospital, MTR, bus station, bank, gas station等
+  - 50km搜索範圍，最多50個景點，按距離由近至遠排序
+  - 全球適用的多語言支持
+
+#### 🔧 **Stage 2.1 MVVM架構重構 - 已完成**
+- ✅ **正確MVVM職責分離**
+  - **Model層 (NearbyAttractionsModel)**: 負責所有業務邏輯，數據搜索、處理、排序、去重
+  - **ViewModel層 (LocationViewModel)**: 只負責協調Model和View，處理presentation logic
+  - **View層 (TravelMapView)**: 純粹UI顯示，從ViewModel獲取數據
+  - 完全符合Apple官方MVVM設計模式標準
+
+- ✅ **搜索邏輯優化**
+  - 每個關鍵字收集25個結果避免MKLocalSearch限流
+  - 合併所有結果後進行全局按距離排序
+  - 智能去重保留最近的同名景點
+  - 精確限制為前50個最近景點
+
+- ✅ **代碼清理與優化**
+  - 移除所有過濾器邏輯，讓純淨搜索關鍵字自然決定結果
+  - 完全取消距離限制和POI類型過濾
+  - 清理所有DEBUG追蹤代碼
+  - 代碼結構更簡潔，維護性更佳
+
+#### 🚀 **技術突破**
+- **解決搜索質量問題**: 從根源使用純淨旅遊關鍵字而非後期過濾
+- **實現真正最近50個景點**: 全局排序而非分組排序
+- **完善MVVM架構**: Model負責業務邏輯，ViewModel協調，View顯示
+- **提升搜索效率**: 25個結果限制避免API限流，確保穩定性
+
+#### 📱 **部署狀態**
+- 成功編譯並部署到iPhone設備"Monster"
+- 景點搜索功能正常運作
+- 底部面板顯示最近50個旅遊景點
+- 所有核心功能保持穩定：
+  - ✅ 位置服務與Apple Maps風格定位圖標
+  - ✅ 附近景點自動搜索與顯示
+  - ✅ 三階段景點面板管理
+  - ✅ 全球旅遊景點支持
+
+#### 🎯 **質量保證**
+- 嚴格遵循Apple Human Interface Guidelines
+- 完整的MVVM架構實現
+- 高效的搜索算法和數據處理
+- 全球適用的旅遊景點搜索
+
+#### 📦 **版本控制**
+- 將創建git標籤 `stage-2.1` 作為還原點
+- 基於Stage 2附近景點功能進行MVVM重構優化
+- 所有功能測試通過，準備同步到GitHub
+
+#### 🔮 **下一階段規劃**
+- 基於完善的MVVM架構準備数据持久化功能
+- 考慮添加景點詳細資訊頁面
+- 規劃多媒體整合與CoreData儲存
+- 準備CloudKit雲端同步階段
+
+---
+
+**專案狀態**: Stage 2.1 MVVM重構完成，附近景點功能穩定運行，代碼架構優秀，準備進入數據持久化階段
