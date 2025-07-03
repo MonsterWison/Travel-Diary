@@ -888,6 +888,7 @@ class LocationViewModel: ObservableObject {
             latitude: attraction.coordinate.latitude,
             longitude: attraction.coordinate.longitude
         )
+        selectedAttraction = attraction
         moveToLocation(coordinate: coordinate, zoomLevel: .neighborhood)
     }
     
@@ -975,7 +976,7 @@ class LocationViewModel: ObservableObject {
     
     /// 用戶要求：每次打開apps時自動搜尋幾十米至50km範圍內50個景點（公開方法供View調用）
     func autoSearchAttractionsOnAppStart() {
-        print("🚀 應用啟動自動搜尋景點（全球適用）- 範圍：幾十米至50km，數量：50個，排序：由近至遠")
+        print("📱 應用啟動自動搜尋景點（全球適用）- 範圍：幾十米至50km，數量：50個，排序：由近至遠")
         
         // 用戶要求：面板始終保持縮小狀態
         print("📱 景點面板保持縮小狀態")
@@ -1359,6 +1360,8 @@ class LocationViewModel: ObservableObject {
         cooldownTimer?.invalidate()
         cooldownTimer = nil
     }
+    
+    @Published var selectedAttraction: NearbyAttraction? = nil // 正確放在類內部
 }
 
 // MARK: - TravelPoint Model

@@ -464,3 +464,10 @@ flowchart TD
 - ✅ **All features strictly follow Apple HIG and MVVM architecture.**
 
 (Completed on 2025/07/04, marked as Stage 2.2, restore point created)
+
+### 🆕 Stage 3.1 Map Interaction & Annotation Enhancement (July 5, 2025)
+- ✅ **Tap Nearby Attraction to Annotate**: Tapping any item in the "Nearby Attractions" list auto-centers the map and displays a clear annotation for that attraction.
+- ✅ **ViewModel Injection Fix**: All attraction cards (expanded/compact) now correctly receive LocationViewModel, preventing crashes.
+- ✅ **Full HIG & MVVM Compliance**: All UI, annotation, and interaction logic strictly follow Apple HIG and MVVM best practices.
+
+(Completed on 2025/07/05, marked as Stage 3.1, restore point created)

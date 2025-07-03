@@ -583,6 +583,12 @@ struct TravelMapView: View {
                     SearchResultAnnotation(result: selectedResult)
                 }
             }
+            // 新增：選中景點標註
+            if let selectedAttraction = viewModel.selectedAttraction {
+                Annotation(selectedAttraction.name, coordinate: CLLocationCoordinate2D(latitude: selectedAttraction.coordinate.latitude, longitude: selectedAttraction.coordinate.longitude)) {
+                    SelectedAttractionAnnotation(attraction: selectedAttraction)
+                }
+            }
         }
         // HIG: 使用標準地圖樣式，符合Apple Maps的顯示標準，顯示所有興趣點包含大廈名稱
         .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .all))
@@ -884,9 +890,7 @@ struct TravelMapView: View {
                 } else {
                     ForEach(viewModel.nearbyAttractions) { attraction in
                         ExpandedAttractionCard(attraction: attraction)
-                            .onTapGesture {
-                                viewModel.focusOnAttraction(attraction)
-                            }
+                            .environmentObject(viewModel)
                     }
                 }
             }
@@ -1279,7 +1283,7 @@ struct SimpleAttractionCard: View {
 // MARK: - HIG緊湊模式景點卡片（Apple Maps風格）
 struct CompactAttractionCard: View {
     let attraction: NearbyAttraction
-    
+    @EnvironmentObject var viewModel: LocationViewModel
     private var distanceText: String {
         let distance = attraction.distanceFromUser
         if distance < 1000 {
@@ -1290,38 +1294,42 @@ struct CompactAttractionCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // HIG: 景點圖標區域
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(attraction.category.color.opacity(0.12))
-                    .frame(width: 100, height: 60)
-                
-                Image(systemName: attraction.category.iconName)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(attraction.category.color)
-            }
-            
-            // HIG: 景點信息區域
-            VStack(alignment: .leading, spacing: 4) {
-                Text(attraction.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                
-                HStack {
-                    Text(attraction.category.displayName)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+        Button(action: {
+            viewModel.focusOnAttraction(attraction)
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // HIG: 景點圖標區域
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(attraction.category.color.opacity(0.12))
+                        .frame(width: 100, height: 60)
                     
-                    Spacer()
-                    
-                    Text(distanceText)
-                        .font(.caption)
+                    Image(systemName: attraction.category.iconName)
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(attraction.category.color)
+                }
+                
+                // HIG: 景點信息區域
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(attraction.name)
+                        .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    
+                    HStack {
+                        Text(attraction.category.displayName)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Text(distanceText)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
         }
@@ -1329,13 +1337,14 @@ struct CompactAttractionCard: View {
         .padding(8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+        .buttonStyle(.plain)
     }
 }
 
 // MARK: - HIG展開模式景點卡片（Apple Maps風格）
 struct ExpandedAttractionCard: View {
     let attraction: NearbyAttraction
-    
+    @EnvironmentObject var viewModel: LocationViewModel
     private var distanceText: String {
         let distance = attraction.distanceFromUser
         if distance < 1000 {
@@ -1346,65 +1355,94 @@ struct ExpandedAttractionCard: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            // HIG: 景點圖標
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(attraction.category.color.opacity(0.12))
-                    .frame(width: 60, height: 60)
+        Button(action: {
+            viewModel.focusOnAttraction(attraction)
+        }) {
+            HStack(spacing: 16) {
+                // HIG: 景點圖標
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(attraction.category.color.opacity(0.12))
+                        .frame(width: 60, height: 60)
+                    
+                    Image(systemName: attraction.category.iconName)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundColor(attraction.category.color)
+                }
                 
-                Image(systemName: attraction.category.iconName)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(attraction.category.color)
+                // HIG: 景點詳細信息
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(attraction.name)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                            .lineLimit(2)
+                        
+                        Spacer()
+                        
+                        Text(distanceText)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    HStack {
+                        Text(attraction.category.displayName)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                    }
+                    
+                    if let address = attraction.address, !address.isEmpty {
+                        Text(address)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                // HIG: 箭頭指示器
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.gray)
             }
-            
-            // HIG: 景點詳細信息
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(attraction.name)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                    
-                    Spacer()
-                    
-                    Text(distanceText)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                }
-                
-                HStack {
-                    Text(attraction.category.displayName)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                }
-                
-                if let address = attraction.address, !address.isEmpty {
-                    Text(address)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            
-            // HIG: 箭頭指示器
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.gray)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 1)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 1)
+        .buttonStyle(.plain)
     }
 }
 
-
+// MARK: - 選中景點標註視圖
+struct SelectedAttractionAnnotation: View {
+    let attraction: NearbyAttraction
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 32, height: 32)
+                    .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 2)
+                Image(systemName: attraction.category.iconName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            Text(attraction.name)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        }
+    }
+}
 
 // MARK: - Preview
 #Preview {
