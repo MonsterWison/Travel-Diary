@@ -54,6 +54,15 @@ class LocationViewModel: ObservableObject {
     @Published var isLoadingAttractions: Bool = false
     @Published var isUsingCachedData: Bool = false // 標示是否正在使用緩存數據
     
+    // MARK: - 手動更新冷卻機制
+    @Published private var lastManualRefreshTime: Date?
+    @Published var isManualRefreshing: Bool = false // 標示是否正在手動更新中
+    private let manualRefreshCooldown: TimeInterval = 10.0 // 10秒冷卻期，遵循Apple MapKit API最佳實踐
+    
+    // MARK: - 倒數計時器
+    @Published private var timerTrigger: Int = 0 // 觸發UI更新的計時器屬性
+    private var cooldownTimer: Timer? // 倒數計時器
+    
     // HIG: 數據持久化屬性
     private let attractionsCacheKey = "nearbyAttractionsCache"
     
@@ -112,6 +121,11 @@ class LocationViewModel: ObservableObject {
         
         // HIG: 立即請求位置權限，不延遲
         requestLocationPermission()
+    }
+    
+    // MARK: - Deinitialization
+    deinit {
+        stopCooldownTimer()
     }
     
     // MARK: - Private Methods
@@ -626,8 +640,8 @@ class LocationViewModel: ObservableObject {
                     
                     // 用戶要求：面板始終保持縮小狀態，更新景點數據
                     print("🔄 景點搜尋器保持縮小狀態，數據已更新（\(processedAttractions.count)個景點）")
-                    // 確保面板是縮小狀態
-                    if self.attractionPanelState != .compact {
+                    // 確保面板是縮小狀態（只有當前不是展開狀態時才自動縮小）
+                    if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
                         self.attractionPanelState = .compact
                     }
                 } else {
@@ -1002,6 +1016,95 @@ class LocationViewModel: ObservableObject {
         }
     }
     
+    /// 手動更新景點搜索（用戶點擊左下角放大鏡圖標時觸發）
+    func manualRefreshAttractions() {
+        print("🔄 用戶手動更新景點搜索")
+        
+        // 檢查冷卻期：防止過於頻繁的MKLocalSearch API調用
+        let now = Date()
+        if let lastRefresh = lastManualRefreshTime {
+            let timeSinceLastRefresh = now.timeIntervalSince(lastRefresh)
+            if timeSinceLastRefresh < manualRefreshCooldown {
+                let remainingTime = Int(manualRefreshCooldown - timeSinceLastRefresh)
+                print("⏰ 手動更新冷卻中，還需等待 \(remainingTime) 秒（防止API限流）")
+                return
+            }
+        }
+        
+        // 檢查位置服務狀態
+        guard let location = currentLocation else {
+            print("⚠️ 沒有當前位置，無法手動更新景點")
+            return
+        }
+        
+        print("📍 手動更新位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        
+        // 如果正在搜索中，提供用戶反饋但不重複搜索
+        if isLoadingAttractions {
+            print("⏳ 正在搜索中，忽略手動更新請求")
+            return
+        }
+        
+        // 記錄手動更新時間
+        lastManualRefreshTime = now
+        print("✅ 手動更新冷卻期開始，10秒後可再次使用")
+        
+        // 啟動倒數計時器
+        startCooldownTimer()
+        
+        // 強制刷新景點搜索（繞過緩存）
+        print("🔄 強制刷新景點搜索（繞過緩存）")
+        
+        // 清除當前景點數據，確保顯示載入狀態
+        isLoadingAttractions = true
+        isManualRefreshing = true // 標示開始手動更新
+        isUsingCachedData = false
+        
+        // MVVM: ViewModel使用Model來處理業務邏輯（遵循現有代碼模式）
+        let attractionsModel = NearbyAttractionsModel()
+        attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                self.nearbyAttractions = processedAttractions
+                self.isLoadingAttractions = false
+                self.isManualRefreshing = false // 標示手動更新完成
+                
+                print("✅ 手動更新完成: \(processedAttractions.count) 個景點")
+                
+                if !processedAttractions.isEmpty {
+                    // 顯示距離範圍信息
+                    if let nearest = processedAttractions.first, let farthest = processedAttractions.last {
+                        let nearestDistance = nearest.distanceFromUser < 1000 ? 
+                            "\(Int(nearest.distanceFromUser))米" : 
+                            String(format: "%.1fkm", nearest.distanceFromUser/1000)
+                        let farthestDistance = farthest.distanceFromUser < 1000 ? 
+                            "\(Int(farthest.distanceFromUser))米" : 
+                            String(format: "%.1fkm", farthest.distanceFromUser/1000)
+                        print("📏 手動更新範圍：最近\(nearestDistance) - 最遠\(farthestDistance)")
+                    }
+                    
+                    // 確保面板是縮小狀態（只有當前不是展開狀態時才自動縮小）
+                    if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
+                        self.attractionPanelState = .compact
+                    }
+                    
+                    // 標記為最新數據（非緩存）
+                    self.isUsingCachedData = false
+                    
+                    // 保存到緩存
+                    self.autoSaveAttractionsToCache()
+                    
+                    print("🔄 手動更新完成，面板保持縮小狀態")
+                } else {
+                    print("❌ 手動更新沒有找到景點")
+                    // 即使沒有找到景點，也要結束手動更新狀態
+                    self.isManualRefreshing = false
+                }
+            }
+        }
+    }
+    
     /// HIG: 應用恢復時檢查並觸發必要的搜索（公開方法供View調用）
     func checkAttractionsOnAppResume() {
         print("📱 應用恢復檢查")
@@ -1206,6 +1309,55 @@ class LocationViewModel: ObservableObject {
         print("   - 面板狀態: \(attractionPanelState)")
         print("   - 載入中: \(isLoadingAttractions)")
         print("🔍 === 調試結束 ===")
+    }
+    
+    // MARK: - 手動更新冷卻狀態（UI支援）
+    
+    /// 檢查手動更新是否可用（用於UI狀態顯示）
+    var canManualRefresh: Bool {
+        // 依賴 timerTrigger 來觸發UI實時更新
+        _ = timerTrigger
+        
+        guard let lastRefresh = lastManualRefreshTime else { return true }
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
+        return timeSinceLastRefresh >= manualRefreshCooldown
+    }
+    
+    /// 獲取下次可更新的剩餘時間（用於UI顯示，秒為單位）
+    var manualRefreshCooldownRemaining: Int {
+        // 依賴 timerTrigger 來觸發UI實時更新
+        _ = timerTrigger
+        
+        guard let lastRefresh = lastManualRefreshTime else { return 0 }
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
+        let remaining = manualRefreshCooldown - timeSinceLastRefresh
+        return max(0, Int(remaining))
+    }
+    
+    // MARK: - 倒數計時器管理
+    
+    /// 啟動倒數計時器
+    private func startCooldownTimer() {
+        stopCooldownTimer() // 先停止現有的Timer
+        
+        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                self.timerTrigger += 1 // 觸發UI更新
+                
+                // 檢查是否倒數完成
+                if self.canManualRefresh {
+                    self.stopCooldownTimer()
+                }
+            }
+        }
+    }
+    
+    /// 停止倒數計時器
+    private func stopCooldownTimer() {
+        cooldownTimer?.invalidate()
+        cooldownTimer = nil
     }
 }
 

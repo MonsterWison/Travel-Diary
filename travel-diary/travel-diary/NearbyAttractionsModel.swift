@@ -204,7 +204,7 @@ struct AttractionSearchConfig {
         maxResults: 50,
         categories: AttractionCategory.allCases,
         updateThreshold: 100, // 100米
-        cacheExpiry: 3600 // 1小時
+        cacheExpiry: 900 // 15分鐘（從1小時改為15分鐘）
     )
 }
 

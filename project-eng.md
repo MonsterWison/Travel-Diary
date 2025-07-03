@@ -456,3 +456,11 @@ flowchart TD
 ---
 
 **Project Status**: Stage 2.1 MVVM refactoring completed, nearby attractions functionality running stably, excellent code architecture, ready for data persistence phase
+
+### 🆕 Stage 2.2 Attraction Search Panel Three-Stage Enhancement (July 4, 2025)
+- ✅ **Manual Refresh**: Added magnifier button for manual refresh with 10s cooldown protection.
+- ✅ **Real-Time Countdown Timer**: Cooldown number updates every second, UI reflects remaining seconds in real time.
+- ✅ **Expanded Panel UI Consistency**: In expanded mode, magnifier on the left, title centered, large orange 'Updating...' text centered during manual refresh, and panel does not auto-collapse—user control is fully respected.
+- ✅ **All features strictly follow Apple HIG and MVVM architecture.**
+
+(Completed on 2025/07/04, marked as Stage 2.2, restore point created)

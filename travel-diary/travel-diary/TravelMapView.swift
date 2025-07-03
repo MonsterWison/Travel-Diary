@@ -8,6 +8,7 @@ struct TravelMapView: View {
     @State private var cameraPosition = MapCameraPosition.automatic
     @FocusState private var isSearchFocused: Bool
     @State private var attractionCheckTimer: Timer?
+    @State private var cooldownUpdateTimer: Timer?
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -117,6 +118,8 @@ struct TravelMapView: View {
             viewModel.autoSearchAttractionsOnAppStart()  // 自動搜尋最新景點
             // HIG: 確保應用本地化設置正確
             configureMapLocalization()
+            // 啟動手動更新冷卻倒計時器
+            startCooldownUpdateTimer()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             // HIG: 應用進入前台時檢查並觸發必要的搜索
@@ -131,6 +134,11 @@ struct TravelMapView: View {
         }
         .onReceive(viewModel.$region) { newRegion in
             updateCameraPosition(newRegion)
+        }
+        .onDisappear {
+            // 停止所有計時器
+            attractionCheckTimer?.invalidate()
+            cooldownUpdateTimer?.invalidate()
         }
     }
     
@@ -700,12 +708,47 @@ struct TravelMapView: View {
                     // 用戶要求：hidden狀態也顯示緊湊內容
                     compactModeContent
                 } else {
-                    // 標題文字
-                    Text("附近景點")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                        .padding(.top, 4)
+                    // 展開狀態標題：左側放大鏡按鈕，置中標題，右側預留空間
+                    HStack {
+                        // 左側手動更新按鈕
+                        Button(action: {
+                            viewModel.manualRefreshAttractions()
+                        }) {
+                            ZStack {
+                                Image(systemName: "location.magnifyingglass")
+                                    .font(.title3)
+                                    .foregroundColor(viewModel.canManualRefresh ? .blue : .gray)
+                                if !viewModel.canManualRefresh {
+                                    Text("\(viewModel.manualRefreshCooldownRemaining)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .frame(width: 16, height: 16)
+                                        .background(Circle().fill(Color.red))
+                                        .offset(x: 8, y: -8)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isLoadingAttractions || !viewModel.canManualRefresh)
+                        
+                        Spacer()
+                        
+                        Text("附近景點")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                        
+                        Spacer()
+                        // 右側預留空間（未來可擴展）
+                        Rectangle()
+                            .frame(width: 32, height: 1)
+                            .opacity(0)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
                 }
             }
             .frame(height: (viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden) ? 80 : 60)
@@ -724,9 +767,29 @@ struct TravelMapView: View {
         HStack {
             // 左側圖標和文字
             HStack(spacing: 8) {
-                Image(systemName: "location.magnifyingglass")
-                    .font(.title3)
-                    .foregroundColor(.blue)
+                // 可點擊的手動更新按鈕（含冷卻狀態顯示）
+                Button(action: {
+                    viewModel.manualRefreshAttractions()
+                }) {
+                    ZStack {
+                        Image(systemName: "location.magnifyingglass")
+                            .font(.title3)
+                            .foregroundColor(viewModel.canManualRefresh ? .blue : .gray)
+                        
+                        // 冷卻倒計時顯示
+                        if !viewModel.canManualRefresh {
+                            Text("\(viewModel.manualRefreshCooldownRemaining)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(width: 16, height: 16)
+                                .background(Circle().fill(Color.red))
+                                .offset(x: 8, y: -8)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isLoadingAttractions || !viewModel.canManualRefresh)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("附近景點")
@@ -736,12 +799,12 @@ struct TravelMapView: View {
                     
                     if viewModel.isLoadingAttractions {
                         HStack(spacing: 4) {
-                            if viewModel.isUsingCachedData {
+                            if viewModel.isUsingCachedData || viewModel.isManualRefreshing {
                                 Image(systemName: "clock.arrow.circlepath")
                                     .font(.caption2)
                                     .foregroundColor(.orange)
                             }
-                            Text(viewModel.isUsingCachedData ? "更新中..." : "搜索50km範圍內...")
+                            Text((viewModel.isUsingCachedData || viewModel.isManualRefreshing) ? "更新中..." : "搜索50km範圍內...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -783,7 +846,24 @@ struct TravelMapView: View {
     private var expandedModeContent: some View {
         ScrollView(.vertical, showsIndicators: true) {
             LazyVStack(spacing: 12) {
-                if viewModel.nearbyAttractions.isEmpty && !viewModel.isLoadingAttractions {
+                // 檢查是否正在手動更新
+                if viewModel.isManualRefreshing {
+                    // 手動更新中的大型居中顯示
+                    VStack(spacing: 20) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundColor(.orange)
+                            
+                            Text("更新中...")
+                                .font(.title)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 80)
+                } else if viewModel.nearbyAttractions.isEmpty && !viewModel.isLoadingAttractions {
                     // 空狀態
                     VStack(spacing: 16) {
                         Image(systemName: "location.magnifyingglass")
@@ -878,6 +958,18 @@ struct TravelMapView: View {
                 print("✅ 定期檢查完成，景點數量: \(viewModel.nearbyAttractions.count)，面板狀態: \(viewModel.attractionPanelState)")
                 timer.invalidate()
             }
+        }
+    }
+    
+    /// 啟動手動更新冷卻計時器（每秒更新UI顯示）
+    private func startCooldownUpdateTimer() {
+        // 停止現有計時器
+        cooldownUpdateTimer?.invalidate()
+        
+        // 創建新計時器，每秒更新一次UI
+        cooldownUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            // 觸發UI更新，讓冷卻倒計時能實時顯示
+            // SwiftUI會自動檢測canManualRefresh和manualRefreshCooldownRemaining的變化
         }
     }
 }
