@@ -9,6 +9,7 @@ struct TravelMapView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var attractionCheckTimer: Timer?
     @State private var cooldownUpdateTimer: Timer?
+    @State private var selectedAttractionID: UUID? = nil
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -139,6 +140,13 @@ struct TravelMapView: View {
             // 停止所有計時器
             attractionCheckTimer?.invalidate()
             cooldownUpdateTimer?.invalidate()
+        }
+        .onChange(of: selectedAttractionID) { newID in
+            if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
+                openAttractionWebSearch(attraction)
+                // 點擊後自動取消選中，避免重複觸發
+                selectedAttractionID = nil
+            }
         }
     }
     
@@ -560,7 +568,7 @@ struct TravelMapView: View {
     
     // MARK: - HIG標準地圖視圖（符合Apple Maps本地化規範）
     private var mapView: some View {
-        Map(position: $cameraPosition) {
+        Map(position: $cameraPosition, selection: $selectedAttractionID) {
             // 用戶當前位置標註
             if let location = viewModel.currentLocation {
                 Annotation("當前位置", coordinate: location.coordinate) {
@@ -584,10 +592,10 @@ struct TravelMapView: View {
                 }
             }
             // 新增：選中景點標註
-            if let selectedAttraction = viewModel.selectedAttraction {
-                Annotation(selectedAttraction.name, coordinate: CLLocationCoordinate2D(latitude: selectedAttraction.coordinate.latitude, longitude: selectedAttraction.coordinate.longitude)) {
-                    SelectedAttractionAnnotation(attraction: selectedAttraction)
-                }
+            ForEach(viewModel.nearbyAttractions, id: \.id) { attraction in
+                Marker(attraction.name, systemImage: attraction.category.iconName, coordinate: CLLocationCoordinate2D(latitude: attraction.coordinate.latitude, longitude: attraction.coordinate.longitude))
+                    .tint(.orange)
+                    .tag(attraction.id)
             }
         }
         // HIG: 使用標準地圖樣式，符合Apple Maps的顯示標準，顯示所有興趣點包含大廈名稱
@@ -891,6 +899,10 @@ struct TravelMapView: View {
                     ForEach(viewModel.nearbyAttractions) { attraction in
                         ExpandedAttractionCard(attraction: attraction)
                             .environmentObject(viewModel)
+                            .onTapGesture {
+                                // 僅高亮地圖，不進入詳情頁
+                                viewModel.focusOnAttraction(attraction)
+                            }
                     }
                 }
             }
@@ -975,6 +987,33 @@ struct TravelMapView: View {
             // 觸發UI更新，讓冷卻倒計時能實時顯示
             // SwiftUI會自動檢測canManualRefresh和manualRefreshCooldownRemaining的變化
         }
+    }
+    
+    private func openAttractionWebSearch(_ attraction: NearbyAttraction) {
+        let query = "\(attraction.name) \(attraction.address ?? "")"
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let coordinate = viewModel.currentLocation?.coordinate
+        let isInChina = isCoordinateInChina(coordinate)
+        let urlString: String
+        if isInChina {
+            urlString = "https://www.baidu.com/s?wd=\(encoded)"
+        } else {
+            urlString = "https://www.google.com/search?q=\(encoded)"
+        }
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    /// 判斷座標是否在中國大陸範圍（簡單經緯度判斷，覆蓋大部分地區）
+    private func isCoordinateInChina(_ coordinate: CLLocationCoordinate2D?) -> Bool {
+        guard let c = coordinate else { return false }
+        // 中國大陸經緯度大致範圍
+        let minLat: Double = 18.0
+        let maxLat: Double = 54.0
+        let minLon: Double = 73.0
+        let maxLon: Double = 135.0
+        return c.latitude >= minLat && c.latitude <= maxLat && c.longitude >= minLon && c.longitude <= maxLon
     }
 }
 
