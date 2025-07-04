@@ -313,51 +313,6 @@ class NearbyAttractionsService: ObservableObject {
         completion(updatedAttraction)
     }
     
-    /// 生成佔位圖片
-    private func generatePlaceholderImage(for category: AttractionCategory) -> UIImage {
-        let size = CGSize(width: 300, height: 200)
-        let color: UIColor
-        let iconName = category.iconName
-        
-        // 根據分類選擇顏色
-        switch category {
-        case .historicalSite: color = .systemBrown
-        case .museum: color = .systemBlue
-        case .park: color = .systemGreen
-        case .temple: color = .systemOrange
-        case .beach: color = .systemCyan
-        case .mountain: color = .systemGray
-        case .viewpoint: color = .systemPurple
-        case .shoppingCenter: color = .systemPink
-        case .culturalCenter: color = .systemIndigo
-        case .amusementPark: color = .systemRed
-        case .restaurant: color = .systemYellow
-        case .other: color = .systemGray2
-        }
-        
-        return UIGraphicsImageRenderer(size: size).image { context in
-            // 背景
-            color.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            
-            // 圖標
-            let iconSize: CGFloat = 60
-            let iconRect = CGRect(
-                x: (size.width - iconSize) / 2,
-                y: (size.height - iconSize) / 2,
-                width: iconSize,
-                height: iconSize
-            )
-            
-            UIColor.white.setFill()
-            if let icon = UIImage(systemName: iconName) {
-                icon.draw(in: iconRect)
-            }
-        }
-    }
-    
-    // 已移除過濾邏輯 - 讓旅遊專屬搜索關鍵字自然排除非旅遊地點
-    
     /// 分類景點 - 三層智能分類系統，符合全球適用和HIG規格
     private func categorizeAttraction(item: MKMapItem, keyword: String) -> AttractionCategory {
         let name = item.name?.lowercased() ?? ""
