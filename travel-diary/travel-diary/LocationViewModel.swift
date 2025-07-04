@@ -37,7 +37,6 @@ class LocationViewModel: ObservableObject {
     @Published var showingLocationAlert = false
     @Published var currentAddress: String = "定位中..."
     @Published var travelPoints: [TravelPoint] = []
-    @Published var debugInfo: String = "初始化中..."
     @Published var locationError: Error?
     @Published var isTrackingUser: Bool = false // 是否跟隨用戶位置
     
@@ -114,7 +113,6 @@ class LocationViewModel: ObservableObject {
     init() {
         bindLocationService()
         setupSearch()
-        updateDebugInfo()
         
         // 用戶要求：每次打開時景點搜尋器是縮小狀態（compact）
         attractionPanelState = .compact
@@ -165,7 +163,6 @@ class LocationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] heading in
                 self?.currentHeading = heading
-                self?.updateDebugInfo()
             }
             .store(in: &cancellables)
         
@@ -188,7 +185,6 @@ class LocationViewModel: ObservableObject {
         guard let location = location else { return }
         
         currentLocation = location
-        updateDebugInfo()
         
         // 檢查是否為固定的香港位置
         if isFixedHongKongLocation(location) {
@@ -220,11 +216,8 @@ class LocationViewModel: ObservableObject {
             locationService.getAddressFromLocation(location) { [weak self] address in
                 DispatchQueue.main.async {
                     self?.currentAddress = address ?? "無法獲取地址"
-                    self?.updateDebugInfo()
                 }
             }
-        } else {
-            updateDebugInfo()
         }
         
         // HIG: 智能景點搜索觸發邏輯
@@ -243,7 +236,6 @@ class LocationViewModel: ObservableObject {
     }
     
     private func handleAuthorizationChange(_ status: CLAuthorizationStatus) {
-        updateDebugInfo()
         switch status {
         case .denied, .restricted:
             showingLocationAlert = true
@@ -263,7 +255,6 @@ class LocationViewModel: ObservableObject {
         if let error = error {
             currentAddress = "位置獲取失敗: \(error.localizedDescription)"
         }
-        updateDebugInfo()
     }
     
     // HIG: 改進的地圖區域更新方法，支持自定義縮放
@@ -356,30 +347,6 @@ class LocationViewModel: ObservableObject {
     /// 清除所有旅行路徑點
     func clearTravelPoints() {
         travelPoints.removeAll()
-    }
-    
-    /// 更新調試信息
-    private func updateDebugInfo() {
-        let authStatus = locationService.authorizationStatus
-        let hasLocation = currentLocation != nil
-        let errorInfo = locationError?.localizedDescription ?? "無"
-        debugInfo = """
-        權限狀態: \(authStatusString(authStatus))
-        當前位置: \(hasLocation ? "有" : "無")
-        位置服務: \(CLLocationManager.locationServicesEnabled() ? "開啟" : "關閉")
-        錯誤信息: \(errorInfo)
-        """
-    }
-    
-    private func authStatusString(_ status: CLAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: return "未決定"
-        case .restricted: return "受限制"
-        case .denied: return "拒絕"
-        case .authorizedAlways: return "總是允許"
-        case .authorizedWhenInUse: return "使用時允許"
-        @unknown default: return "未知"
-        }
     }
     
     // MARK: - 搜索設置（符合HIG本地化標準）
@@ -591,22 +558,15 @@ class LocationViewModel: ObservableObject {
     // MARK: - MVVM: ViewModel從Model獲取數據
     /// MVVM架構：ViewModel從Model獲取處理好的景點數據
     func searchNearbyAttractions() {
-        print("🎯 ViewModel: 開始從Model獲取景點數據...")
-        print("   - 當前位置: \(currentLocation?.coordinate.latitude ?? 0),\(currentLocation?.coordinate.longitude ?? 0)")
-        print("   - 面板狀態: \(attractionPanelState)")
-        
         guard let location = currentLocation else { 
-            print("❌ 沒有當前位置，搜索取消")
             return 
         }
         
         guard !isLoadingAttractions else {
-            print("🔍 正在搜索中，跳過重複請求")
             return
         }
         
         isLoadingAttractions = true
-        print("🔍 ViewModel: 開始從Model獲取數據，面板保持縮小狀態")
         
         // MVVM: ViewModel使用Model來處理業務邏輯
         let attractionsModel = NearbyAttractionsModel()
@@ -618,20 +578,7 @@ class LocationViewModel: ObservableObject {
                 self.nearbyAttractions = processedAttractions
                 self.isLoadingAttractions = false
                 
-                print("✅ ViewModel: 從Model成功獲取 \(processedAttractions.count) 個景點")
-                
                 if !processedAttractions.isEmpty {
-                    // 顯示距離範圍信息
-                    if let nearest = processedAttractions.first, let farthest = processedAttractions.last {
-                        let nearestDistance = nearest.distanceFromUser < 1000 ? 
-                            "\(Int(nearest.distanceFromUser))米" : 
-                            String(format: "%.1fkm", nearest.distanceFromUser/1000)
-                        let farthestDistance = farthest.distanceFromUser < 1000 ? 
-                            "\(Int(farthest.distanceFromUser))米" : 
-                            String(format: "%.1fkm", farthest.distanceFromUser/1000)
-                        print("📏 距離範圍：最近\(nearestDistance) - 最遠\(farthestDistance)")
-                    }
-                    
                     // MVVM: 標記為實時數據（非緩存）
                     self.isUsingCachedData = false
                     
@@ -639,19 +586,10 @@ class LocationViewModel: ObservableObject {
                     self.autoSaveAttractionsToCache()
                     
                     // 用戶要求：面板始終保持縮小狀態，更新景點數據
-                    print("🔄 景點搜尋器保持縮小狀態，數據已更新（\(processedAttractions.count)個景點）")
-                    // 確保面板是縮小狀態（只有當前不是展開狀態時才自動縮小）
                     if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
                         self.attractionPanelState = .compact
                     }
                 } else {
-                    print("❌ Model返回空數據")
-                    print("📱 沒有景點，保持搜尋器縮小狀態")
-                    
-                    // 用戶要求：沒有景點時保持面板縮小狀態
-                    if self.attractionPanelState != .compact {
-                        self.attractionPanelState = .compact
-                    }
                     self.isUsingCachedData = false
                 }
             }
@@ -660,22 +598,13 @@ class LocationViewModel: ObservableObject {
     
     /// HIG: 檢查並觸發必要的景點搜索（解決應用重啟後面板消失的問題）
     private func checkAndTriggerAttractionsSearchIfNeeded() {
-        print("🔍 檢查景點搜索條件:")
-        print("   - 有位置: \(currentLocation != nil)")
-        print("   - 景點數據為空: \(nearbyAttractions.isEmpty)")
-        print("   - 搜索中: \(isLoadingAttractions)")
-        print("   - 面板狀態: \(attractionPanelState)")
-        
-        // 更寬鬆的條件：只要有位置且沒在搜索中就觸發
         guard let _ = currentLocation,
               !isLoadingAttractions else {
-            print("❌ 不符合搜索條件，跳過觸發")
             return
         }
         
         // 如果已經有景點數據，確保面板是縮小狀態
         if !nearbyAttractions.isEmpty {
-            print("✅ 有景點數據，確保面板是縮小狀態")
             DispatchQueue.main.async {
                 if self.attractionPanelState != .compact {
                     self.attractionPanelState = .compact
@@ -686,18 +615,14 @@ class LocationViewModel: ObservableObject {
         
         // 如果沒有景點數據，觸發搜索
         if nearbyAttractions.isEmpty {
-            print("✅ 沒有景點數據，觸發搜索")
             searchNearbyAttractions()
         } else if isUsingCachedData {
             // 如果正在使用緩存數據，觸發後台更新
-            print("🔄 正在使用緩存數據，觸發後台更新")
             DispatchQueue.global(qos: .utility).async {
                 DispatchQueue.main.async {
                     self.searchNearbyAttractions()
                 }
             }
-        } else {
-            print("✅ 已有最新數據，無需搜索")
         }
     }
     
@@ -976,85 +901,57 @@ class LocationViewModel: ObservableObject {
     
     /// 用戶要求：每次打開apps時自動搜尋幾十米至50km範圍內50個景點（公開方法供View調用）
     func autoSearchAttractionsOnAppStart() {
-        print("📱 應用啟動自動搜尋景點（全球適用）- 範圍：幾十米至50km，數量：50個，排序：由近至遠")
-        
         // 用戶要求：面板始終保持縮小狀態
-        print("📱 景點面板保持縮小狀態")
         
         // 檢查位置服務狀態
         if currentLocation == nil {
-            print("⚠️ 沒有當前位置，啟動位置服務並延遲搜尋")
             locationService.requestLocationPermission()
             locationService.startLocationUpdates()
             
             // 延遲搜尋，等待位置更新
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 if let location = self.currentLocation {
-                    print("📍 位置已獲取，開始搜尋幾十米至50km範圍內景點")
-                    print("📍 當前位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
                     self.searchNearbyAttractions()
                 } else {
-                    print("⚠️ 仍然沒有位置，稍後再試")
                     // 再次嘗試
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         if let location = self.currentLocation {
-                            print("📍 延遲位置已獲取，開始搜尋景點")
-                            print("📍 當前位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
                             self.searchNearbyAttractions()
                         } else {
-                            print("❌ 無法獲取位置，景點搜尋暫停")
+                            // 無法獲取位置，景點搜尋暫停
                         }
                     }
                 }
             }
         } else {
-            print("📍 已有位置，立即搜尋景點")
-            print("📍 當前位置: \(currentLocation!.coordinate.latitude), \(currentLocation!.coordinate.longitude)")
-            print("🔍 開始執行景點搜索...")
             // 立即搜尋景點
             searchNearbyAttractions()
-            print("✅ 搜索方法已調用")
         }
     }
     
     /// 手動更新景點搜索（用戶點擊左下角放大鏡圖標時觸發）
     func manualRefreshAttractions() {
-        print("🔄 用戶手動更新景點搜索")
-        
         // 檢查冷卻期：防止過於頻繁的MKLocalSearch API調用
         let now = Date()
         if let lastRefresh = lastManualRefreshTime {
             let timeSinceLastRefresh = now.timeIntervalSince(lastRefresh)
             if timeSinceLastRefresh < manualRefreshCooldown {
-                let remainingTime = Int(manualRefreshCooldown - timeSinceLastRefresh)
-                print("⏰ 手動更新冷卻中，還需等待 \(remainingTime) 秒（防止API限流）")
                 return
             }
         }
         
         // 檢查位置服務狀態
         guard let location = currentLocation else {
-            print("⚠️ 沒有當前位置，無法手動更新景點")
-            return
-        }
-        
-        print("📍 手動更新位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        
-        // 如果正在搜索中，提供用戶反饋但不重複搜索
-        if isLoadingAttractions {
-            print("⏳ 正在搜索中，忽略手動更新請求")
             return
         }
         
         // 記錄手動更新時間
         lastManualRefreshTime = now
-        print("✅ 手動更新冷卻期開始，10秒後可再次使用")
         
         // 啟動倒數計時器
         startCooldownTimer()
         
         // 強制刷新景點搜索（繞過緩存）
-        print("🔄 強制刷新景點搜索（繞過緩存）")
         
         // 清除當前景點數據，確保顯示載入狀態
         isLoadingAttractions = true
@@ -1071,20 +968,7 @@ class LocationViewModel: ObservableObject {
                 self.isLoadingAttractions = false
                 self.isManualRefreshing = false // 標示手動更新完成
                 
-                print("✅ 手動更新完成: \(processedAttractions.count) 個景點")
-                
                 if !processedAttractions.isEmpty {
-                    // 顯示距離範圍信息
-                    if let nearest = processedAttractions.first, let farthest = processedAttractions.last {
-                        let nearestDistance = nearest.distanceFromUser < 1000 ? 
-                            "\(Int(nearest.distanceFromUser))米" : 
-                            String(format: "%.1fkm", nearest.distanceFromUser/1000)
-                        let farthestDistance = farthest.distanceFromUser < 1000 ? 
-                            "\(Int(farthest.distanceFromUser))米" : 
-                            String(format: "%.1fkm", farthest.distanceFromUser/1000)
-                        print("📏 手動更新範圍：最近\(nearestDistance) - 最遠\(farthestDistance)")
-                    }
-                    
                     // 確保面板是縮小狀態（只有當前不是展開狀態時才自動縮小）
                     if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
                         self.attractionPanelState = .compact
@@ -1096,9 +980,7 @@ class LocationViewModel: ObservableObject {
                     // 保存到緩存
                     self.autoSaveAttractionsToCache()
                     
-                    print("🔄 手動更新完成，面板保持縮小狀態")
                 } else {
-                    print("❌ 手動更新沒有找到景點")
                     // 即使沒有找到景點，也要結束手動更新狀態
                     self.isManualRefreshing = false
                 }
@@ -1108,11 +990,8 @@ class LocationViewModel: ObservableObject {
     
     /// HIG: 應用恢復時檢查並觸發必要的搜索（公開方法供View調用）
     func checkAttractionsOnAppResume() {
-        print("📱 應用恢復檢查")
-        
         // 檢查位置服務狀態
         if currentLocation == nil {
-            print("⚠️ 沒有當前位置，重新啟動位置服務")
             locationService.requestLocationPermission()
             locationService.startLocationUpdates()
             return
@@ -1133,29 +1012,12 @@ class LocationViewModel: ObservableObject {
     
     /// HIG: 保存景點數據到緩存（提供離線體驗）
     func saveAttractionsToCache() {
-        print("🔄 === 開始保存景點數據到緩存 ===")
-        
         guard !nearbyAttractions.isEmpty else {
-            print("💾 跳過保存：沒有景點數據")
             return
         }
         
         guard let currentLocation = currentLocation else {
-            print("💾 跳過保存：沒有當前位置")
             return
-        }
-        
-        print("📍 保存位置: \(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)")
-        print("🎯 保存景點數量: \(nearbyAttractions.count)")
-        print("📊 使用緩存狀態: \(isUsingCachedData)")
-        print("📱 當前面板狀態: \(attractionPanelState)")
-        
-        // 將面板狀態轉換為字符串
-        let panelStateString: String
-        switch attractionPanelState {
-        case .hidden: panelStateString = "hidden"
-        case .compact: panelStateString = "compact"
-        case .expanded: panelStateString = "expanded"
         }
         
         let cache = NearbyAttractionsCache(
@@ -1163,7 +1025,7 @@ class LocationViewModel: ObservableObject {
             lastUserLocation: AttractionsCoordinate(from: currentLocation.coordinate),
             searchRadius: 50000, // 50km
             maxResults: 50,
-            panelState: panelStateString
+            panelState: attractionPanelState.description
         )
         
         do {
@@ -1173,143 +1035,35 @@ class LocationViewModel: ObservableObject {
             // HIG: 立即同步確保數據安全
             UserDefaults.standard.synchronize()
             
-            print("✅ 成功保存 \(nearbyAttractions.count) 個景點到緩存")
-            print("📊 緩存數據大小: \(data.count) bytes")
-            print("🔑 緩存Key: \(attractionsCacheKey)")
-            print("⏰ 保存時間: \(Date())")
-            
-            // 即時驗證緩存完整性
-            self.verifyCacheIntegrity()
-            
         } catch {
-            print("❌ 保存緩存失敗: \(error.localizedDescription)")
-            print("🔍 錯誤詳情: \(error)")
-        }
-        
-        print("🔄 === 緩存保存完成 ===")
-    }
-    
-    /// MVVM & HIG: 驗證緩存完整性
-    private func verifyCacheIntegrity() {
-        if let data = UserDefaults.standard.data(forKey: attractionsCacheKey) {
-            do {
-                let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
-                print("✅ 緩存驗證成功: \(cache.attractions.count) 個景點")
-            } catch {
-                print("❌ 緩存驗證失敗: \(error)")
-            }
-        } else {
-            print("❌ 緩存驗證失敗: 無法讀取數據")
+            // 保存緩存失敗
         }
     }
     
     /// MVVM & HIG: 從緩存加載景點數據（立即響應用戶）
     func loadAttractionsFromCache() {
-        print("🔄 === 開始加載緩存景點數據 ===")
-        
         guard let data = UserDefaults.standard.data(forKey: attractionsCacheKey) else {
-            print("💾 沒有找到緩存數據（Key: \(attractionsCacheKey)）")
-            print("🔄 === 緩存加載結束（無數據）===")
             return
         }
         
-        print("📊 找到緩存數據，大小: \(data.count) bytes")
-        
         do {
             let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
-            print("✅ 成功解碼緩存數據")
-            print("📍 緩存位置: \(cache.lastUserLocation.latitude), \(cache.lastUserLocation.longitude)")
-            print("⏰ 緩存時間: \(cache.lastUpdated)")
-            print("🎯 景點數量: \(cache.attractions.count)")
             
-            let cacheAge = Date().timeIntervalSince(cache.lastUpdated)
-            print("📅 緩存年齡: \(String(format: "%.1f", cacheAge/3600)) 小時")
+            // 立即加載緩存數據
+            self.nearbyAttractions = cache.sortedAttractions
+            self.isUsingCachedData = true
             
-            // 檢查緩存是否過期（6小時 = 21600秒）
-            if cache.isExpired(maxAge: 21600) {
-                print("💾 緩存已過期，清理並跳過加載")
-                clearExpiredCache()
-                print("🔄 === 緩存加載結束（已過期）===")
-                return
-            }
-            
-            print("🎉 緩存數據有效，立即加載到UI")
-            print("🔄 開始更新ViewModel狀態...")
-            
-            // MVVM: 在主線程更新UI綁定的數據
-            DispatchQueue.main.async {
-                // 立即加載緩存數據
-                self.nearbyAttractions = cache.sortedAttractions
-                self.isUsingCachedData = true
-                
-                print("✅ ViewModel狀態已更新")
-                print("   - 景點數量: \(self.nearbyAttractions.count)")
-                print("   - 使用緩存: \(self.isUsingCachedData)")
-                print("💾 緩存面板狀態: \(cache.panelState)")
-                
-                // 用戶要求：每次打開時面板都是縮小狀態，不管緩存中保存的是什麼狀態
-                if !cache.attractions.isEmpty {
-                    print("🚀 確保景點面板始終為縮小狀態（用戶要求）")
-                    // 始終設置為compact狀態
-                    self.attractionPanelState = .compact
-                    print("📱 面板狀態已設置為縮小狀態: \(self.attractionPanelState)")
-                } else {
-                    print("⚠️ 緩存中沒有景點數據，保持縮小狀態")
-                    self.attractionPanelState = .compact
-                }
+            // 用戶要求：每次打開時面板都是縮小狀態，不管緩存中保存的是什麼狀態
+            if !cache.attractions.isEmpty {
+                // 始終設置為compact狀態
+                self.attractionPanelState = .compact
+            } else {
+                self.attractionPanelState = .compact
             }
             
         } catch {
-            print("❌ 加載緩存失敗: \(error.localizedDescription)")
-            print("🔍 錯誤詳情: \(error)")
+            // 加載緩存失敗
         }
-        
-        print("🔄 === 緩存加載完成 ===")
-    }
-    
-    /// HIG: 清除過期緩存數據
-    private func clearExpiredCache() {
-        UserDefaults.standard.removeObject(forKey: attractionsCacheKey)
-        print("🗑️ 已清除過期緩存")
-    }
-    
-    /// MVVM & HIG: 調試用 - 檢查緩存狀態
-    func debugCacheStatus() {
-        print("🔍 === 緩存狀態調試 ===")
-        print("🔑 緩存Key: \(attractionsCacheKey)")
-        
-        if let data = UserDefaults.standard.data(forKey: attractionsCacheKey) {
-            print("📊 找到緩存數據，大小: \(data.count) bytes")
-            
-            do {
-                let cache = try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
-                print("✅ 緩存解碼成功")
-                print("📍 緩存位置: \(cache.lastUserLocation.latitude), \(cache.lastUserLocation.longitude)")
-                print("⏰ 緩存時間: \(cache.lastUpdated)")
-                print("🎯 景點數量: \(cache.attractions.count)")
-                print("📱 緩存面板狀態: \(cache.panelState)")
-                print("⏳ 緩存年齡: \(Date().timeIntervalSince(cache.lastUpdated)/3600) 小時")
-                print("✨ 緩存狀態: \(cache.isExpired(maxAge: 21600) ? "已過期" : "有效")")
-                
-                if !cache.attractions.isEmpty {
-                    print("🎪 前3個景點:")
-                    for (index, attraction) in cache.attractions.prefix(3).enumerated() {
-                        print("   \(index + 1). \(attraction.name) - \(attraction.distanceFromUser)m")
-                    }
-                }
-            } catch {
-                print("❌ 緩存解碼失敗: \(error)")
-            }
-        } else {
-            print("💾 沒有找到緩存數據")
-        }
-        
-        print("🎯 當前ViewModel狀態:")
-        print("   - 景點數量: \(nearbyAttractions.count)")
-        print("   - 使用緩存: \(isUsingCachedData)")
-        print("   - 面板狀態: \(attractionPanelState)")
-        print("   - 載入中: \(isLoadingAttractions)")
-        print("🔍 === 調試結束 ===")
     }
     
     // MARK: - 手動更新冷卻狀態（UI支援）
@@ -1395,6 +1149,14 @@ enum AttractionPanelState {
         case .hidden: return 0
         case .compact: return 80    // 固定80pt高度，像Apple Maps
         case .expanded: return UIScreen.main.bounds.height * 0.6
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .hidden: return "hidden"
+        case .compact: return "compact"
+        case .expanded: return "expanded"
         }
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import WebKit
 
 /// 旅遊日誌主視圖 - 符合 HIG 設計規範
 struct TravelMapView: View {
@@ -7,9 +8,9 @@ struct TravelMapView: View {
     @State private var showingAddPointAlert = false
     @State private var cameraPosition = MapCameraPosition.automatic
     @FocusState private var isSearchFocused: Bool
-    @State private var attractionCheckTimer: Timer?
-    @State private var cooldownUpdateTimer: Timer?
     @State private var selectedAttractionID: UUID? = nil
+    @State private var webSearchURL: URL? = nil
+    @State private var showingWebSearch = false
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -119,8 +120,6 @@ struct TravelMapView: View {
             viewModel.autoSearchAttractionsOnAppStart()  // 自動搜尋最新景點
             // HIG: 確保應用本地化設置正確
             configureMapLocalization()
-            // 啟動手動更新冷卻倒計時器
-            startCooldownUpdateTimer()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             // HIG: 應用進入前台時檢查並觸發必要的搜索
@@ -136,16 +135,18 @@ struct TravelMapView: View {
         .onReceive(viewModel.$region) { newRegion in
             updateCameraPosition(newRegion)
         }
-        .onDisappear {
-            // 停止所有計時器
-            attractionCheckTimer?.invalidate()
-            cooldownUpdateTimer?.invalidate()
-        }
         .onChange(of: selectedAttractionID) { newID in
             if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
                 openAttractionWebSearch(attraction)
                 // 點擊後自動取消選中，避免重複觸發
                 selectedAttractionID = nil
+            }
+        }
+        .fullScreenCover(isPresented: $showingWebSearch) {
+            if let url = webSearchURL {
+                WebSearchViewController(url: url) {
+                    showingWebSearch = false
+                }
             }
         }
     }
@@ -935,85 +936,40 @@ struct TravelMapView: View {
         viewModel.configureLocalization(locale: Locale(identifier: "zh-HK"))
     }
     
-    // MARK: - HIG景點面板檢查機制
-    
-    /// 開始定期檢查景點搜索狀態
-    private func startPeriodicAttractionCheck() {
-        // 停止現有定時器
-        attractionCheckTimer?.invalidate()
-        
-        print("⏰ 開始定期檢查景點搜索狀態")
-        
-        // 創建新定時器，每2秒檢查一次，持續30秒
-        var checkCount = 0
-        attractionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { timer in
-            checkCount += 1
-            print("🔍 定期檢查 #\(checkCount)")
-            
-            // 檢查並觸發搜索
-            viewModel.checkAttractionsOnAppResume()
-            
-            // 強制備用機制：如果檢查5次後仍然沒有景點，且有位置，強制觸發搜索
-            if checkCount == 5 && viewModel.nearbyAttractions.isEmpty && viewModel.currentLocation != nil {
-                print("🚨 強制觸發景點搜索（備用機制）")
-                viewModel.searchNearbyAttractions()
-            }
-            
-            // 超級強制機制：如果檢查10次後仍然沒有面板顯示，強制顯示
-            if checkCount == 10 && !viewModel.nearbyAttractions.isEmpty && viewModel.attractionPanelState == .hidden {
-                print("🚨 強制顯示景點面板（超級備用機制）")
-                DispatchQueue.main.async {
-                    withAnimation(.easeOut(duration: 0.6)) {
-                        viewModel.attractionPanelState = .compact
-                    }
-                }
-            }
-            
-            // 如果已經有景點且面板顯示，或檢查超過15次（30秒），停止定時器
-            if ((!viewModel.nearbyAttractions.isEmpty && viewModel.attractionPanelState != .hidden) || checkCount >= 15) {
-                print("✅ 定期檢查完成，景點數量: \(viewModel.nearbyAttractions.count)，面板狀態: \(viewModel.attractionPanelState)")
-                timer.invalidate()
-            }
-        }
-    }
-    
-    /// 啟動手動更新冷卻計時器（每秒更新UI顯示）
-    private func startCooldownUpdateTimer() {
-        // 停止現有計時器
-        cooldownUpdateTimer?.invalidate()
-        
-        // 創建新計時器，每秒更新一次UI
-        cooldownUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            // 觸發UI更新，讓冷卻倒計時能實時顯示
-            // SwiftUI會自動檢測canManualRefresh和manualRefreshCooldownRemaining的變化
-        }
-    }
-    
     private func openAttractionWebSearch(_ attraction: NearbyAttraction) {
         let query = "\(attraction.name) \(attraction.address ?? "")"
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let coordinate = viewModel.currentLocation?.coordinate
-        let isInChina = isCoordinateInChina(coordinate)
+        let regionInfo = getRegionInfo(from: viewModel.currentLocation)
         let urlString: String
-        if isInChina {
+        if regionInfo.isMainlandChina {
             urlString = "https://www.baidu.com/s?wd=\(encoded)"
         } else {
             urlString = "https://www.google.com/search?q=\(encoded)"
         }
         if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
+            webSearchURL = url
+            showingWebSearch = true
         }
     }
     
-    /// 判斷座標是否在中國大陸範圍（簡單經緯度判斷，覆蓋大部分地區）
-    private func isCoordinateInChina(_ coordinate: CLLocationCoordinate2D?) -> Bool {
-        guard let c = coordinate else { return false }
-        // 中國大陸經緯度大致範圍
-        let minLat: Double = 18.0
-        let maxLat: Double = 54.0
-        let minLon: Double = 73.0
-        let maxLon: Double = 135.0
-        return c.latitude >= minLat && c.latitude <= maxLat && c.longitude >= minLon && c.longitude <= maxLon
+    /// 根據CLLocation取得地區資訊（isoCountryCode與行政區）
+    private func getRegionInfo(from location: CLLocation?) -> (isoCountryCode: String?, administrativeArea: String?, isMainlandChina: Bool) {
+        guard let location = location else { return (nil, nil, false) }
+        var result: (String?, String?, Bool) = (nil, nil, false)
+        let semaphore = DispatchSemaphore(value: 0)
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let placemark = placemarks?.first {
+                let code = placemark.isoCountryCode?.uppercased()
+                let admin = placemark.administrativeArea ?? ""
+                // 只要是中國大陸（CN），且行政區不是香港、澳門、台灣才算大陸
+                let isMainland = (code == "CN") && (!admin.contains("香港") && !admin.contains("澳门") && !admin.contains("台灣") && !admin.contains("台湾"))
+                result = (code, admin, isMainland)
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 1.0) // 最多等1秒
+        return result
     }
 }
 
@@ -1065,54 +1021,67 @@ struct UserLocationAnnotation: View {
 // MARK: - Apple Maps真實定位指示器（帶向外擴散漸變光束）
 struct AppleMapLocationWithBeam: View {
     let heading: CLHeading?
-    
-    // 安全的角度計算，永遠返回有效角度
-    private var safeRotationAngle: Double {
-        guard let heading = heading else {
-            return 0 // 沒有heading數據時指向北方
-        }
-        
+    @State private var lastAngle: Double = 0
+    @State private var displayAngle: Double = 0
+
+    private var targetAngle: Double {
+        guard let heading = heading else { return 0 }
         let trueHeading = heading.trueHeading
         let magneticHeading = heading.magneticHeading
-        
         var angle: Double = 0
-        
-        // 嚴格的數值安全檢查
         if trueHeading >= 0 && trueHeading <= 360 && trueHeading.isFinite && !trueHeading.isNaN {
             angle = trueHeading
         } else if magneticHeading >= 0 && magneticHeading <= 360 && magneticHeading.isFinite && !magneticHeading.isNaN {
             angle = magneticHeading
         } else {
-            angle = 0 // 安全默認值：指向北方
+            angle = 0
         }
-        
-        // 確保角度在有效範圍內
         return angle.truncatingRemainder(dividingBy: 360)
     }
-    
+
+    private func shortestAngle(from: Double, to: Double) -> Double {
+        let diff = (to - from).truncatingRemainder(dividingBy: 360)
+        if diff > 180 {
+            return diff - 360
+        } else if diff < -180 {
+            return diff + 360
+        } else {
+            return diff
+        }
+    }
+
     var body: some View {
         ZStack {
-            // Apple Maps向外擴散漸變光束（從深色到透明）- 調整長度匹配Apple Maps
             AppleMapDirectionalBeam()
                 .fill(
                     RadialGradient(
                         gradient: Gradient(stops: [
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.8), location: 0.0), // 中心深色
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.5), location: 0.2), // 中間過渡
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.2), location: 0.6), // 邊緣漸淡
-                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.0), location: 1.0)  // 完全透明
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.8), location: 0.0),
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.5), location: 0.2),
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.2), location: 0.6),
+                            .init(color: Color(red: 0.0, green: 0.478, blue: 1.0).opacity(0.0), location: 1.0)
                         ]),
                         center: .center,
                         startRadius: 1,
-                        endRadius: 50 // 增加光束長度以匹配Apple Maps
+                        endRadius: 50
                     )
                 )
-                .frame(width: 100, height: 100) // 增加光束擴散範圍以匹配Apple Maps
-                .rotationEffect(.degrees(safeRotationAngle - 90)) // 向上為0度基準
-                .animation(.easeInOut(duration: 0.25), value: safeRotationAngle)
-            
-            // Apple Maps標準定位點
+                .frame(width: 100, height: 100)
+                .rotationEffect(.degrees(displayAngle - 90))
+                .animation(.easeInOut(duration: 0.25), value: displayAngle)
             AppleMapLocationDot()
+        }
+        .onAppear {
+            displayAngle = targetAngle
+            lastAngle = targetAngle
+        }
+        .onChange(of: targetAngle) { newAngle in
+            let shortest = shortestAngle(from: lastAngle, to: newAngle)
+            let next = lastAngle + shortest
+            lastAngle = next.truncatingRemainder(dividingBy: 360)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                displayAngle = lastAngle
+            }
         }
     }
 }
@@ -1486,4 +1455,47 @@ struct SelectedAttractionAnnotation: View {
 // MARK: - Preview
 #Preview {
     TravelMapView()
+}
+
+import WebKit
+struct WebSearchViewController: UIViewControllerRepresentable {
+    let url: URL
+    let onClose: () -> Void
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let webVC = UIViewController()
+        let webView = WKWebView()
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        webVC.view.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: webVC.view.topAnchor),
+            webView.leadingAnchor.constraint(equalTo: webVC.view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: webVC.view.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: webVC.view.bottomAnchor)
+        ])
+        let request = URLRequest(url: url)
+        webView.load(request)
+        webVC.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "chevron.left"),
+            style: .plain,
+            target: context.coordinator,
+            action: #selector(Coordinator.closeTapped)
+        )
+        webVC.navigationItem.title = ""
+        let nav = UINavigationController(rootViewController: webVC)
+        nav.navigationBar.prefersLargeTitles = false
+        return nav
+    }
+    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onClose: onClose)
+    }
+    class Coordinator: NSObject {
+        let onClose: () -> Void
+        init(onClose: @escaping () -> Void) {
+            self.onClose = onClose
+        }
+        @objc func closeTapped() {
+            onClose()
+        }
+    }
 } 
