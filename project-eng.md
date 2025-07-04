@@ -472,21 +472,34 @@ flowchart TD
 
 (Completed on 2025/07/05, marked as Stage 3.1, restore point created)
 
-# Travel Diary Stage 3.3 Update Log
+# Travel Diary iOS Project Update Log
 
-## Major Updates
-- Map attraction marker tap behavior:
-  - Automatically detect if user is in Mainland China, dynamically switch search engine (Baidu for China, Google for others).
-  - Tapping a marker instantly opens Safari with the appropriate search engine, querying attraction name and address.
-- Removed all in-app detail view, cache, and model loading delays—instant web lookup experience.
-- Full compliance with Apple HIG and MVVM architecture throughout.
-- Code has been deployed and tested on iPhone "Monster".
+## Stage 3.4 (2025-07-04)
 
-## Completed Items
-- [x] Map marker tap auto-opens web search (region-aware Baidu/Google)
-- [x] Strict HIG+MVVM data flow and UI design
-- [x] All features tested on real device
+- **All unused debug prints, logs, legacy/temp/redundant code removed**; all existing features remain unchanged.
+- 100% compliant with Apple Human Interface Guidelines (HIG) and MVVM architecture.
+- Codebase is now cleaner, more maintainable, and easier to read.
+- Packaged as Stage 3.4, restore point created, and synced to GitHub.
 
-## Archive Note
-- This state is archived as **Stage 3.3 Restore Point** and can be restored anytime.
-- All code, settings, and documentation are synchronized.
+---
+
+## Main Features (same as Stage 3.3)
+- Map: SwiftUI Map with full support for custom POIs, travel points, search, panel, cooldown, user location, heading beam, etc.
+- Region-based search engine: Mainland China (excluding Hong Kong, Macau, Taiwan) uses Baidu; all other regions use Google.
+- Embedded web search: WKWebView fullscreen, top-left HIG-standard chevron.left back button.
+- Heading beam: shortest-path compensation, always smooth animation.
+- Full cache, cooldown, manual refresh, panel expand/collapse, UI/UX all strictly HIG-compliant.
+
+---
+
+## Code Quality
+- All unused debug/log/temp/legacy/redundant code has been thoroughly removed.
+- Only production code and essential comments remain; no test/dummy/unused functions or properties.
+- Fully suitable as a stable foundation for enterprise-grade iOS travel apps.
+
+---
+
+## Packaging & Restore Point
+- Git tag: `stage-3.4`
+- Package file: Travel-Diary-Stage-3.4.zip
+- Restore point: This version is a safe baseline for all future development.
