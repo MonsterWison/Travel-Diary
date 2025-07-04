@@ -471,3 +471,22 @@ flowchart TD
 - ✅ **Full HIG & MVVM Compliance**: All UI, annotation, and interaction logic strictly follow Apple HIG and MVVM best practices.
 
 (Completed on 2025/07/05, marked as Stage 3.1, restore point created)
+
+# Travel Diary Stage 3.3 Update Log
+
+## Major Updates
+- Map attraction marker tap behavior:
+  - Automatically detect if user is in Mainland China, dynamically switch search engine (Baidu for China, Google for others).
+  - Tapping a marker instantly opens Safari with the appropriate search engine, querying attraction name and address.
+- Removed all in-app detail view, cache, and model loading delays—instant web lookup experience.
+- Full compliance with Apple HIG and MVVM architecture throughout.
+- Code has been deployed and tested on iPhone "Monster".
+
+## Completed Items
+- [x] Map marker tap auto-opens web search (region-aware Baidu/Google)
+- [x] Strict HIG+MVVM data flow and UI design
+- [x] All features tested on real device
+
+## Archive Note
+- This state is archived as **Stage 3.3 Restore Point** and can be restored anytime.
+- All code, settings, and documentation are synchronized.
