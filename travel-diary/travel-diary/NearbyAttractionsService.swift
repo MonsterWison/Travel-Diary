@@ -530,4 +530,32 @@ class NearbyAttractionsService: ObservableObject {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documentsPath.appendingPathComponent(cacheFileName)
     }
+    
+    private func generatePlaceholderImage(for category: AttractionCategory) -> UIImage {
+        let config = UIImage.SymbolConfiguration(pointSize: 60, weight: .regular)
+        let systemName = category.iconName
+        let color: UIColor
+        switch category {
+        case .historicalSite: color = .brown
+        case .museum: color = .purple
+        case .park: color = .green
+        case .temple: color = .orange
+        case .beach: color = .blue
+        case .mountain: color = .gray
+        case .viewpoint: color = .cyan
+        case .shoppingCenter: color = .systemIndigo
+        case .culturalCenter: color = .yellow
+        case .amusementPark: color = .systemPink
+        case .restaurant: color = .red
+        case .other: color = .systemMint
+        }
+        let image = UIImage(systemName: systemName, withConfiguration: config) ?? UIImage()
+        // 塗色
+        UIGraphicsBeginImageContextWithOptions(image.size, false, 0.0)
+        color.setFill()
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        let coloredImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+        UIGraphicsEndImageContext()
+        return coloredImage
+    }
 } 

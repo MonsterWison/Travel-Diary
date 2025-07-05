@@ -11,6 +11,7 @@ struct TravelMapView: View {
     @State private var selectedAttractionID: UUID? = nil
     @State private var webSearchURL: URL? = nil
     @State private var showingWebSearch = false
+    @State private var isRegionInfoLoading: Bool = false
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -96,6 +97,14 @@ struct TravelMapView: View {
             
             // MARK: - Apple Maps風格拖拽面板
             attractionDraggablePanel
+            if isRegionInfoLoading {
+                Color.black.opacity(0.2).ignoresSafeArea()
+                ProgressView("正在判斷地區，請稍候...")
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+                    .shadow(radius: 8)
+            }
         }
         .navigationTitle("旅遊日誌")
             .navigationBarTitleDisplayMode(.inline)
@@ -939,16 +948,21 @@ struct TravelMapView: View {
     private func openAttractionWebSearch(_ attraction: NearbyAttraction) {
         let query = "\(attraction.name) \(attraction.address ?? "")"
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let regionInfo = getRegionInfo(from: viewModel.currentLocation)
-        let urlString: String
-        if regionInfo.isMainlandChina {
-            urlString = "https://www.baidu.com/s?wd=\(encoded)"
-        } else {
-            urlString = "https://www.google.com/search?q=\(encoded)"
-        }
-        if let url = URL(string: urlString) {
-            webSearchURL = url
-            showingWebSearch = true
+        isRegionInfoLoading = true
+        viewModel.getCachedOrFreshRegionInfo { regionInfo in
+            let urlString: String
+            if regionInfo.isMainlandChina {
+                urlString = "https://www.baidu.com/s?wd=\(encoded)"
+            } else {
+                urlString = "https://www.google.com/search?q=\(encoded)"
+            }
+            DispatchQueue.main.async {
+                if let url = URL(string: urlString) {
+                    webSearchURL = url
+                    showingWebSearch = true
+                }
+                isRegionInfoLoading = false
+            }
         }
     }
     

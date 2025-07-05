@@ -87,6 +87,11 @@ class LocationViewModel: ObservableObject {
     private var searchCompleter = MKLocalSearchCompleter()
     private var searchCancellable: AnyCancellable?
     
+    // 行政區資訊快取
+    private var lastRegionInfo: (isoCountryCode: String?, administrativeArea: String?, isMainlandChina: Bool)? = nil
+    private var lastRegionInfoTimestamp: Date? = nil
+    private let regionInfoCacheValidDuration: TimeInterval = 600 // 10分鐘
+    
     // 計算屬性：判斷地圖是否中心在當前位置
     var isMapCenteredOnLocation: Bool {
         guard let currentLocation = currentLocation else { return false }
@@ -185,6 +190,9 @@ class LocationViewModel: ObservableObject {
         guard let location = location else { return }
         
         currentLocation = location
+        
+        // 定位更新時自動反查行政區並快取
+        updateRegionInfoCache(for: location)
         
         // 檢查是否為固定的香港位置
         if isFixedHongKongLocation(location) {
@@ -1116,6 +1124,46 @@ class LocationViewModel: ObservableObject {
     }
     
     @Published var selectedAttraction: NearbyAttraction? = nil // 正確放在類內部
+    
+    private func updateRegionInfoCache(for location: CLLocation) {
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            if let placemark = placemarks?.first {
+                let code = placemark.isoCountryCode?.uppercased()
+                let admin = placemark.administrativeArea ?? ""
+                let isMainland = (code == "CN") && (!admin.contains("香港") && !admin.contains("澳門") && !admin.contains("台灣") && !admin.contains("台灣"))
+                self?.lastRegionInfo = (code, admin, isMainland)
+                self?.lastRegionInfoTimestamp = Date()
+            }
+        }
+    }
+    
+    /// 取得行政區資訊（優先用快取，超過10分鐘則同步查詢）
+    func getCachedOrFreshRegionInfo(completion: @escaping ((isoCountryCode: String?, administrativeArea: String?, isMainlandChina: Bool)) -> Void) {
+        let now = Date()
+        if let info = lastRegionInfo, let ts = lastRegionInfoTimestamp, now.timeIntervalSince(ts) < regionInfoCacheValidDuration {
+            completion(info)
+            return
+        }
+        // 若快取過期則同步查詢
+        guard let location = currentLocation else {
+            completion((nil, nil, false))
+            return
+        }
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let placemark = placemarks?.first {
+                let code = placemark.isoCountryCode?.uppercased()
+                let admin = placemark.administrativeArea ?? ""
+                let isMainland = (code == "CN") && (!admin.contains("香港") && !admin.contains("澳門") && !admin.contains("台灣") && !admin.contains("台灣"))
+                self.lastRegionInfo = (code, admin, isMainland)
+                self.lastRegionInfoTimestamp = Date()
+                completion((code, admin, isMainland))
+            } else {
+                completion((nil, nil, false))
+            }
+        }
+    }
 }
 
 // MARK: - TravelPoint Model

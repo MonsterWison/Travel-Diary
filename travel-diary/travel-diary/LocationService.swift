@@ -66,10 +66,14 @@ class LocationService: NSObject, ObservableObject {
     @Published var headingAccuracy: CLLocationDegrees = -1
     @Published var headingError: Error?
     
+    private var periodicUpdateTimer: Timer?
+    private let periodicUpdateInterval: TimeInterval = 600 // 10分鐘
+    
     override init() {
         super.init()
         setupLocationManager()
         loadCachedLocation()
+        startPeriodicUpdateTimer()
     }
     
     private func setupLocationManager() {
@@ -271,6 +275,27 @@ class LocationService: NSObject, ObservableObject {
                 completion(nil)
             }
         }
+    }
+    
+    private func startPeriodicUpdateTimer() {
+        periodicUpdateTimer?.invalidate()
+        periodicUpdateTimer = Timer.scheduledTimer(withTimeInterval: periodicUpdateInterval, repeats: true) { [weak self] _ in
+            self?.forceUpdateLocation()
+        }
+    }
+    
+    private func stopPeriodicUpdateTimer() {
+        periodicUpdateTimer?.invalidate()
+        periodicUpdateTimer = nil
+    }
+    
+    private func forceUpdateLocation() {
+        guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else { return }
+        locationManager.requestLocation()
+    }
+    
+    deinit {
+        stopPeriodicUpdateTimer()
     }
 }
 
