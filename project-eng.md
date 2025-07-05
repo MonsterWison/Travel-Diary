@@ -503,3 +503,19 @@ flowchart TD
 - Git tag: `stage-3.4`
 - Package file: Travel-Diary-Stage-3.4.zip
 - Restore point: This version is a safe baseline for all future development.
+
+### Stage 3.4.1 (2025-07-06)
+
+- **Major region-based search engine switch optimization**: Mainland China (excluding HK/Macau/Taiwan) now always uses Baidu, all other regions use Google. All cache, detection, and UI loading states fixed—no more blank page issue.
+- **Attraction annotation interaction improved**: Tapping a nearby attraction auto-annotates, map jumps, and animation is fully HIG-compliant.
+- **10-minute region cache & auto-update**: Model layer updates periodically, ViewModel caches region info, View reflects instantly on interaction.
+- **All debug/temp/redundant code thoroughly removed**; only production code remains.
+- **100% Apple HIG & MVVM compliant.**
+- **Packaged as Stage 3.4.1, restore point created, and synced to GitHub.**
+
+---
+
+## Packaging & Restore Point
+- Git tag: `stage-3.4.1`
+- Package file: Travel-Diary-Stage-3.4.1.zip
+- Restore point: This version features major region search engine and interaction optimizations, recommended as a safe baseline for future development.
