@@ -124,7 +124,7 @@ struct TravelMapView: View {
             setupInitialMapPosition()
             // 用戶要求：每次打開時景點搜尋器應該是縮小狀態
             // viewModel.attractionPanelState 已在ViewModel初始化時設為 .compact
-            // 用戶要求：每次打開apps都自動搜尋幾十米至50km範圍內50個景點（全球所有國家及地區適用）
+            // 用戶要求：每次打開apps都自動搜尋幾十米至20km範圍內50個景點（全球所有國家及地區適用）
             viewModel.loadAttractionsFromCache()  // 先加載緩存提供即時體驗
             viewModel.autoSearchAttractionsOnAppStart()  // 自動搜尋最新景點
             // HIG: 確保應用本地化設置正確
@@ -828,7 +828,7 @@ struct TravelMapView: View {
                                     .font(.caption2)
                                     .foregroundColor(.orange)
                             }
-                            Text((viewModel.isUsingCachedData || viewModel.isManualRefreshing) ? "更新中..." : "搜索50km範圍內...")
+                            Text((viewModel.isUsingCachedData || viewModel.isManualRefreshing) ? "更新中..." : "搜索20km範圍內...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -842,7 +842,7 @@ struct TravelMapView: View {
                                 .foregroundColor(.secondary)
                         }
                     } else {
-                        Text("\(viewModel.nearbyAttractions.count) 個地點（50km內）")
+                        Text("\(viewModel.nearbyAttractions.count) 個地點（20km內）")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

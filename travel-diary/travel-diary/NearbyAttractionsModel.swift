@@ -150,7 +150,7 @@ struct NearbyAttractionsCache: Codable {
     
     init(attractions: [NearbyAttraction] = [], 
          lastUserLocation: AttractionsCoordinate, 
-         searchRadius: Double = 50000, 
+         searchRadius: Double = 20000, // 20km
          maxResults: Int = 50,
          panelState: String = "compact") {
         self.attractions = attractions.sorted { $0.distanceFromUser < $1.distanceFromUser }
@@ -200,7 +200,7 @@ struct AttractionSearchConfig {
     let cacheExpiry: TimeInterval // 緩存過期時間（秒）
     
     static let `default` = AttractionSearchConfig(
-        searchRadius: 50000, // 50km
+        searchRadius: 20000, // 20km
         maxResults: 50,
         categories: AttractionCategory.allCases,
         updateThreshold: 100, // 100米

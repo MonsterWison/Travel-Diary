@@ -4,7 +4,7 @@ import Combine
 import UIKit
 import SwiftUI
 
-/// 附近景點服務 - 負責搜索、緩存和管理50km內的全球景點
+/// 附近景點服務 - 負責搜索、緩存和管理20km內的全球景點
 class NearbyAttractionsService: ObservableObject {
     // MARK: - Published Properties
     @Published var nearbyAttractions: [NearbyAttraction] = []

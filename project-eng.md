@@ -519,3 +519,16 @@ flowchart TD
 - Git tag: `stage-3.4.1`
 - Package file: Travel-Diary-Stage-3.4.1.zip
 - Restore point: This version features major region search engine and interaction optimizations, recommended as a safe baseline for future development.
+
+### 🆕 Stage 3.4.3 (2025-07-06)
+- ✅ **Nearby attractions search radius optimized**: Changed from 50km to 20km, with all UI, logic, cache, parameters, and comments updated to match. Users always see the correct range.
+- ✅ **Map auto-centering behavior improved**: Now only auto-centers on first app launch or when the user taps the location button. All other background location updates will not move the map, fully respecting user actions.
+- ✅ **Strict Apple HIG & MVVM compliance**: All auto-follow, search, and display logic strictly follow design guidelines.
+- ✅ **Code quality and user experience improved**.
+
+---
+
+## Packaging & Restore Point
+- Git tag: `stage-3.4.3`
+- Package file: Travel-Diary-Stage-3.4.3.zip
+- Restore point: This version features major region search engine and interaction optimizations, recommended as a safe baseline for future development.

@@ -409,8 +409,8 @@ class LocationViewModel: ObservableObject {
                 latitude: Self.hongKongLatitude, 
                 longitude: Self.hongKongLongitude
             ),
-            latitudinalMeters: 100000, // 恢復合理搜索範圍，確保建築物信息完整
-            longitudinalMeters: 100000
+            latitudinalMeters: 20000, // 20公里範圍
+            longitudinalMeters: 20000
         )
         
         // HIG: 設置搜索結果類型，完全模仿Apple Maps行為，包含建築物
@@ -896,7 +896,7 @@ class LocationViewModel: ObservableObject {
         }
     }
     
-    /// 用戶要求：每次打開apps時自動搜尋幾十米至50km範圍內50個景點（公開方法供View調用）
+    /// 用戶要求：每次打開apps時自動搜尋幾十米至20km範圍內50個景點（公開方法供View調用）
     func autoSearchAttractionsOnAppStart() {
         // 用戶要求：面板始終保持縮小狀態
         
@@ -1020,7 +1020,7 @@ class LocationViewModel: ObservableObject {
         let cache = NearbyAttractionsCache(
             attractions: nearbyAttractions,
             lastUserLocation: AttractionsCoordinate(from: currentLocation.coordinate),
-            searchRadius: 50000, // 50km
+            searchRadius: 20000, // 20km
             maxResults: 50,
             panelState: attractionPanelState.description
         )
