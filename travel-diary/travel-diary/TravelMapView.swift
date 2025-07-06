@@ -632,8 +632,8 @@ struct TravelMapView: View {
     private func setupInitialMapPosition() {
         cameraPosition = .region(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 22.307761, longitude: 114.257263),
-            latitudinalMeters: 200,
-            longitudinalMeters: 200
+            latitudinalMeters: 1000,
+            longitudinalMeters: 1000
         ))
     }
     
@@ -641,8 +641,8 @@ struct TravelMapView: View {
         withAnimation(.easeInOut(duration: 0.8)) {
             cameraPosition = .region(MKCoordinateRegion(
                 center: newRegion.center,
-                latitudinalMeters: 200,
-                longitudinalMeters: 200
+                latitudinalMeters: 1000,
+                longitudinalMeters: 1000
             ))
         }
     }

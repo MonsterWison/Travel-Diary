@@ -26,12 +26,13 @@ class LocationViewModel: ObservableObject {
     // HIG: 地圖縮放級別常數 - 按照 Apple 推薦的街道級別視圖
     private static let streetLevelSpan = MKCoordinateSpan(latitudeDelta: 0.001, longitudeDelta: 0.001) // 約100米範圍
     private static let neighborhoodSpan = MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003) // 約300米範圍
+    private static let cityLevelSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01) // 約1公里範圍
     
     // MARK: - Published Properties
     @Published var currentLocation: CLLocation?
     @Published var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 22.3193, longitude: 114.1694), // 預設香港座標
-        span: streetLevelSpan // HIG: 使用街道級別的默認縮放
+        span: cityLevelSpan // 預設改為1公里範圍
     )
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var showingLocationAlert = false
@@ -204,8 +205,8 @@ class LocationViewModel: ObservableObject {
         let shouldAutoFollow = !userHasMovedMap || isFirstRealLocation
         
         if shouldAutoFollow {
-            // HIG: 首次位置使用街道級別，後續使用當前縮放級別
-            let zoomLevel = isFirstRealLocation ? Self.streetLevelSpan : region.span
+            // HIG: 首次位置使用1公里級別，後續使用當前縮放級別
+            let zoomLevel = isFirstRealLocation ? Self.cityLevelSpan : region.span
             updateMapRegion(to: location.coordinate, span: zoomLevel)
             
             // 重置用戶移動標記，開始新的自動跟隨
@@ -338,12 +339,10 @@ class LocationViewModel: ObservableObject {
             requestLocationPermission()
             return
         }
-        
         // 重置用戶移動標記，恢復自動跟隨
         userHasMovedMap = false
-        
-        // HIG: 定位按鈕點擊時使用街道級別縮放
-        updateMapRegion(to: location.coordinate, span: Self.streetLevelSpan)
+        // HIG: 定位按鈕點擊時使用1公里級別縮放
+        updateMapRegion(to: location.coordinate, span: Self.cityLevelSpan)
     }
     
     /// 切換用戶位置跟隨模式（保持向後兼容）
