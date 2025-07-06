@@ -451,10 +451,20 @@ flowchart TD
 - Package file: Travel-Diary-Stage-3.5.1.zip
 - Restore point: This version features MVVM temporary storage optimization, recommended as a safe restore point before major changes.
 
-### 🆕 Stage 3.5.2 (2025-07-07)
-- ✅ **Completely removed all unused, debug, print, temporary, legacy, backup, and test code.**
-- ✅ **No changes to any existing features or logic. 100% feature parity.**
-- ✅ **Archived this state as Stage 3.5.2 for future development safety.**
-- ✅ **All changes pushed to GitHub with tag: Stage 3.5.2**.
+### 🆕 Stage 3.5.2（2025-07-07）
+- ✅ **Complete cleanup of all unused, debug, print, temporary, legacy, backup, test code**, keeping only production functionality.
+- ✅ **No changes to any existing functionality or logic**, all features 100% preserved.
+- ✅ **Archive this state as Stage 3.5.2**, as a safe baseline for future development.
+- ✅ **Sync all changes to GitHub, create tag: Stage 3.5.2**.
+
+### 🆕 Stage 3.5.3（2025-07-07）
+- ✅ **Completely fixed all onChange warnings**: Updated all legacy `onChange(of:perform:)` syntax to iOS 17+ new syntax.
+- ✅ **Fixed warning locations**:
+  - Line 146: `onChange(of: selectedAttractionID)` - Attraction selection handling
+  - Line 187: `onChange(of: viewModel.searchText)` - Search text change handling
+  - Line 1097: `onChange(of: targetAngle)` - Direction angle change handling
+- ✅ **Fully compliant with iOS 17+ SwiftUI API standards**: All deprecated API warnings resolved.
+- ✅ **Perfect compilation status**: BUILD SUCCEEDED, no Swift errors or warnings.
+- ✅ **Functionality integrity guaranteed**: All existing features 100% preserved, only API syntax updated.
 
 ---

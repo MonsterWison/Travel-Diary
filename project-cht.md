@@ -551,4 +551,14 @@ flowchart TD
 - ✅ **封存本狀態為 Stage 3.5.2**，作為未來開發的安全基準點。
 - ✅ **同步所有更動至 GitHub，建立 tag：Stage 3.5.2**。
 
+### 🆕 Stage 3.5.3（2025-07-07）
+- ✅ **徹底修正所有 onChange 警告**：將所有舊版 `onChange(of:perform:)` 語法更新為 iOS 17+ 新版語法。
+- ✅ **修正的警告位置**：
+  - 第146行：`onChange(of: selectedAttractionID)` - 景點選擇處理
+  - 第187行：`onChange(of: viewModel.searchText)` - 搜索文字變化處理
+  - 第1097行：`onChange(of: targetAngle)` - 方向角度變化處理
+- ✅ **完全符合 iOS 17+ SwiftUI API 標準**：所有 deprecated API 警告已解決。
+- ✅ **編譯狀態完美**：BUILD SUCCEEDED，無 Swift 錯誤或警告。
+- ✅ **功能完整性保證**：所有現有功能100%保持原狀，僅更新 API 語法。
+
 ---
