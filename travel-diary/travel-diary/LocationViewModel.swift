@@ -93,6 +93,9 @@ class LocationViewModel: ObservableObject {
     private var lastRegionInfoTimestamp: Date? = nil
     private let regionInfoCacheValidDuration: TimeInterval = 600 // 10分鐘
     
+    // 新增：暫存本次定位的50個景點（每次更新都會覆蓋）
+    private(set) var currentNearbyAttractions: [NearbyAttraction] = []
+    
     // 計算屬性：判斷地圖是否中心在當前位置
     var isMapCenteredOnLocation: Bool {
         guard let currentLocation = currentLocation else { return false }
@@ -558,31 +561,25 @@ class LocationViewModel: ObservableObject {
         guard let location = currentLocation else { 
             return 
         }
-        
         guard !isLoadingAttractions else {
             return
         }
-        
         isLoadingAttractions = true
-        
+        // 每次新一輪搜尋前，清除暫存的50個景點
+        currentNearbyAttractions.removeAll()
         // MVVM: ViewModel使用Model來處理業務邏輯
         let attractionsModel = NearbyAttractionsModel()
         attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                
+                // 暫存本次定位的50個景點
+                self.currentNearbyAttractions = processedAttractions
                 // ViewModel從Model獲取處理好的數據
                 self.nearbyAttractions = processedAttractions
                 self.isLoadingAttractions = false
-                
                 if !processedAttractions.isEmpty {
-                    // MVVM: 標記為實時數據（非緩存）
                     self.isUsingCachedData = false
-                    
-                    // HIG: 後台自動保存到緩存
                     self.autoSaveAttractionsToCache()
-                    
-                    // 用戶要求：面板始終保持縮小狀態，更新景點數據
                     if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
                         self.attractionPanelState = .compact
                     }

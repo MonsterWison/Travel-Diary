@@ -532,3 +532,15 @@ flowchart TD
 - Git tag: `stage-3.4.3`
 - Package file: Travel-Diary-Stage-3.4.3.zip
 - Restore point: This version features major region search engine and interaction optimizations, recommended as a safe baseline for future development.
+
+### 🆕 Stage 3.5.1 (2025-07-06)
+- ✅ **MVVM temporary storage optimization**: ViewModel now has currentNearbyAttractions, which temporarily stores the latest 50 attractions after each location update and clears before each new search, always keeping only the latest data.
+- ✅ **Fully MVVM-compliant**: Model handles data, ViewModel coordinates and stores, View only displays.
+- ⚠️ **This version is a safe restore point before major changes** and can be restored at any time.
+
+---
+
+## Packaging & Restore Point
+- Git tag: `stage-3.5.1`
+- Package file: Travel-Diary-Stage-3.5.1.zip
+- Restore point: This version features MVVM temporary storage optimization, recommended as a safe restore point before major changes.

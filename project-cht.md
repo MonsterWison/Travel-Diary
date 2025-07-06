@@ -532,3 +532,10 @@ flowchart TD
 - Git tag：`stage-3.4.3`
 - 封包檔案：Travel-Diary-Stage-3.4.3.zip
 - 還原點說明：本版本為附近景點搜尋半徑優化與地圖自動回定位點行為優化，推薦作為未來開發安全基準點。
+
+### 🆕 Stage 3.5.1（2025-07-06）
+- ✅ **MVVM暫存機制優化**：ViewModel層新增currentNearbyAttractions，每次定位更新後暫存50個景點，並於新一輪搜尋前自動清除，確保只保留最新一輪資料。
+- ✅ **完全符合MVVM規範**：Model負責數據處理，ViewModel負責暫存與協調，View只負責顯示。
+- ⚠️ **此版本為重大改動前的安全還原點**，可隨時回復。
+
+---
