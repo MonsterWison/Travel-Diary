@@ -200,25 +200,15 @@ class LocationViewModel: ObservableObject {
             currentAddress = "香港新界將軍澳彩明苑彩富閣"
         }
         
-        // 改進的地圖跟隨邏輯
+        // 僅首次定位時自動跟隨地圖（app啟動）
         let isFirstRealLocation = !hasReceivedFirstRealLocation
-        let shouldAutoFollow = !userHasMovedMap || isFirstRealLocation
-        
-        if shouldAutoFollow {
-            // HIG: 首次位置使用1公里級別，後續使用當前縮放級別
-            let zoomLevel = isFirstRealLocation ? Self.cityLevelSpan : region.span
-            updateMapRegion(to: location.coordinate, span: zoomLevel)
-            
-            // 重置用戶移動標記，開始新的自動跟隨
-            if userHasMovedMap {
-                userHasMovedMap = false
-            }
-            
-            // 標記已經獲取過真實位置
-            if isFirstRealLocation {
-                hasReceivedFirstRealLocation = true
-            }
+        if isFirstRealLocation {
+            // HIG: 首次位置使用1公里級別
+            updateMapRegion(to: location.coordinate, span: Self.cityLevelSpan)
+            hasReceivedFirstRealLocation = true
+            userHasMovedMap = false // 重置用戶移動標記
         }
+        // 其餘自動定位更新不再自動移動地圖
         
         // 獲取地址信息（只有在非固定位置時才進行地理編碼）
         if !isFixedHongKongLocation(location) {
