@@ -580,9 +580,6 @@ class LocationViewModel: ObservableObject {
                 if !processedAttractions.isEmpty {
                     self.isUsingCachedData = false
                     self.autoSaveAttractionsToCache()
-                    if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
-                        self.attractionPanelState = .compact
-                    }
                 } else {
                     self.isUsingCachedData = false
                 }
@@ -597,13 +594,8 @@ class LocationViewModel: ObservableObject {
             return
         }
         
-        // 如果已經有景點數據，確保面板是縮小狀態
+        // 如果已經有景點數據，不再自動縮小面板
         if !nearbyAttractions.isEmpty {
-            DispatchQueue.main.async {
-                if self.attractionPanelState != .compact {
-                    self.attractionPanelState = .compact
-                }
-            }
             return
         }
         
@@ -963,11 +955,6 @@ class LocationViewModel: ObservableObject {
                 self.isManualRefreshing = false // 標示手動更新完成
                 
                 if !processedAttractions.isEmpty {
-                    // 確保面板是縮小狀態（只有當前不是展開狀態時才自動縮小）
-                    if self.attractionPanelState != .compact && self.attractionPanelState != .expanded {
-                        self.attractionPanelState = .compact
-                    }
-                    
                     // 標記為最新數據（非緩存）
                     self.isUsingCachedData = false
                     
@@ -1046,14 +1033,6 @@ class LocationViewModel: ObservableObject {
             // 立即加載緩存數據
             self.nearbyAttractions = cache.sortedAttractions
             self.isUsingCachedData = true
-            
-            // 用戶要求：每次打開時面板都是縮小狀態，不管緩存中保存的是什麼狀態
-            if !cache.attractions.isEmpty {
-                // 始終設置為compact狀態
-                self.attractionPanelState = .compact
-            } else {
-                self.attractionPanelState = .compact
-            }
             
         } catch {
             // 加載緩存失敗
