@@ -138,6 +138,7 @@ struct TravelMapView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             // HIG: 應用進入後台時自動保存緩存數據
+            print("🔄 應用進入後台，保存景點緩存")
             viewModel.saveAttractionsToCache()
         }
         .onReceive(viewModel.$region) { newRegion in
@@ -233,23 +234,25 @@ struct TravelMapView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.searchResults.prefix(5)) { result in
                         Button(action: {
-                            if !viewModel.isPlaceSearchCoolingDown {
-                                viewModel.selectSearchResult(result)
-                                viewModel.showingSearchResults = false
-                                isSearchFocused = false
-                            }
+                            viewModel.selectSearchResult(result)
+                            viewModel.showingSearchResults = false
+                            isSearchFocused = false
                         }) {
                             HStack(spacing: 16) {
+                                // HIG: 位置圖標（iPhone地圖標準）
                                 Image(systemName: "location.fill")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(viewModel.isPlaceSearchCoolingDown ? .gray : .blue)
+                                    .foregroundColor(.blue)
                                     .frame(width: 24, height: 24)
+                                
+                                // HIG: 地點信息（iPhone地圖標準佈局）
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(result.name)
                                         .font(.system(size: 17, weight: .regular))
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
                                         .truncationMode(.tail)
+                                    
                                     if let subtitle = result.subtitle, !subtitle.isEmpty {
                                         Text(subtitle)
                                             .font(.system(size: 15))
@@ -258,12 +261,8 @@ struct TravelMapView: View {
                                             .truncationMode(.tail)
                                     }
                                 }
+                                
                                 Spacer()
-                                if viewModel.isPlaceSearchCoolingDown {
-                                    Text("冷卻中: \(viewModel.placeSearchCooldownRemaining)s")
-                                        .font(.caption2)
-                                        .foregroundColor(.red)
-                                }
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 14)
@@ -271,7 +270,8 @@ struct TravelMapView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .disabled(viewModel.isPlaceSearchCoolingDown)
+                        
+                        // HIG: 分隔線（iPhone地圖標準）
                         if result.id != viewModel.searchResults.prefix(5).last?.id {
                             Divider()
                                 .padding(.leading, 60)
@@ -285,13 +285,6 @@ struct TravelMapView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                // 顯示冷卻倒數提示
-                if viewModel.isPlaceSearchCoolingDown {
-                    Text("地點搜尋冷卻中，請等待 \(viewModel.placeSearchCooldownRemaining) 秒...")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.top, 4)
-                }
             } else {
                 EmptyView()
             }
@@ -520,7 +513,6 @@ struct TravelMapView: View {
             // 智能定位按鈕
             Button(action: {
                 viewModel.centerOnCurrentLocation()
-                viewModel.restoreOriginalNearbyAttractions()
             }) {
                 Image(systemName: viewModel.shouldShowActiveLocationButton ? "location.fill" : "location")
                     .font(.system(size: 20, weight: .medium))
@@ -536,7 +528,10 @@ struct TravelMapView: View {
             .disabled(viewModel.currentLocation == nil)
             .scaleEffect(viewModel.shouldShowActiveLocationButton ? 1.1 : 1.0)
             .animation(.spring(response: 0.3), value: viewModel.shouldShowActiveLocationButton)
+            
             Spacer()
+            
+            // 添加路徑點按鈕
             Button(action: { showingAddPointAlert = true }) {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")

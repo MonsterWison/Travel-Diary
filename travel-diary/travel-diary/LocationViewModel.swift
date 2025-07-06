@@ -96,6 +96,15 @@ class LocationViewModel: ObservableObject {
     // 新增：暫存本次定位的50個景點（每次更新都會覆蓋）
     private(set) var currentNearbyAttractions: [NearbyAttraction] = []
     
+    // 新增：地點搜尋冷卻機制
+    private var lastPlaceSearchTime: Date? = nil
+    private let placeSearchCooldown: TimeInterval = 2.0 // 2秒
+    @Published var isPlaceSearchCoolingDown: Bool = false
+    @Published var placeSearchCooldownRemaining: Int = 0
+    private var placeSearchCooldownTimer: Timer? = nil
+    private var lastPlaceSearchCoordinate: CLLocationCoordinate2D? = nil
+    private var lastPlaceNearbyAttractions: [NearbyAttraction] = []
+    
     // 計算屬性：判斷地圖是否中心在當前位置
     var isMapCenteredOnLocation: Bool {
         guard let currentLocation = currentLocation else { return false }
@@ -480,12 +489,10 @@ class LocationViewModel: ObservableObject {
         selectedSearchResult = result
         showingSearchResults = false
         searchText = result.name
-        
-        // HIG: 重置用戶移動標記，允許搜索結果覆蓋用戶行為
         userHasMovedMap = false
-        
-        // HIG: 移動地圖到搜索結果位置，使用適當的縮放級別
         moveToLocation(coordinate: result.coordinate, zoomLevel: .neighborhood)
+        // 新增：地圖跳轉後自動搜尋該地點附近50個景點
+        searchNearbyAttractionsForPlace(coordinate: result.coordinate)
     }
     
     // HIG: 立即執行搜索（用於用戶按執行鍵時）
@@ -493,10 +500,30 @@ class LocationViewModel: ObservableObject {
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
-        
         // 取消debounce，立即搜索
         searchCancellable?.cancel()
         performSearch(query: searchText)
+        // 只在用戶有點擊建議時才自動跳轉，否則用地理編碼跳轉
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            // 若用戶未點擊建議，直接用地名地理編碼跳轉
+            if self.selectedSearchResult == nil {
+                let geocoder = CLGeocoder()
+                geocoder.geocodeAddressString(self.searchText) { placemarks, error in
+                    guard let placemark = placemarks?.first, let coordinate = placemark.location?.coordinate else { return }
+                    // 地圖跳轉到地名
+                    self.moveToLocation(coordinate: coordinate, zoomLevel: .neighborhood)
+                    // 並搜尋該地點附近景點
+                    self.selectedSearchResult = SearchResult(
+                        name: self.searchText,
+                        subtitle: placemark.name,
+                        coordinate: coordinate,
+                        placemark: MKPlacemark(placemark: placemark)
+                    )
+                    self.searchNearbyAttractionsForPlace(coordinate: coordinate)
+                }
+            }
+        }
     }
     
     // HIG: 清除搜索結果
@@ -896,12 +923,12 @@ class LocationViewModel: ObservableObject {
             
             // 延遲搜尋，等待位置更新
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                if let location = self.currentLocation {
+                if self.currentLocation != nil {
                     self.searchNearbyAttractions()
                 } else {
                     // 再次嘗試
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                        if let location = self.currentLocation {
+                        if self.currentLocation != nil {
                             self.searchNearbyAttractions()
                         } else {
                             // 無法獲取位置，景點搜尋暫停
@@ -1127,6 +1154,74 @@ class LocationViewModel: ObservableObject {
             } else {
                 completion((nil, nil, false))
             }
+        }
+    }
+    
+    // 新增：地點搜尋冷卻與自動搜尋附近景點
+    private func searchNearbyAttractionsForPlace(coordinate: CLLocationCoordinate2D) {
+        let now = Date()
+        if let last = lastPlaceSearchTime, now.timeIntervalSince(last) < placeSearchCooldown {
+            // 冷卻中，不觸發API
+            startPlaceSearchCooldownTimer()
+            return
+        }
+        lastPlaceSearchTime = now
+        lastPlaceSearchCoordinate = coordinate
+        isPlaceSearchCoolingDown = true
+        placeSearchCooldownRemaining = Int(placeSearchCooldown)
+        startPlaceSearchCooldownTimer()
+        isLoadingAttractions = true
+        let attractionsModel = NearbyAttractionsModel()
+        attractionsModel.searchNearbyAttractions(coordinate: coordinate) { [weak self] processedAttractions in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                var attractions = processedAttractions
+                // 新增：確保搜尋地點本身也在景點列表內
+                if let selected = self.selectedSearchResult {
+                    let alreadyIncluded = attractions.contains { attr in
+                        attr.name == selected.name &&
+                        abs(attr.coordinate.latitude - selected.coordinate.latitude) < 0.0001 &&
+                        abs(attr.coordinate.longitude - selected.coordinate.longitude) < 0.0001
+                    }
+                    if !alreadyIncluded {
+                        let manual = NearbyAttraction(
+                            name: selected.name,
+                            description: selected.subtitle ?? selected.name,
+                            coordinate: AttractionsCoordinate(from: selected.coordinate),
+                            distanceFromUser: 0,
+                            category: .other,
+                            address: selected.subtitle
+                        )
+                        attractions.insert(manual, at: 0)
+                    }
+                }
+                self.lastPlaceNearbyAttractions = attractions
+                self.nearbyAttractions = attractions
+                self.isLoadingAttractions = false
+                self.isUsingCachedData = false
+            }
+        }
+    }
+    
+    private func startPlaceSearchCooldownTimer() {
+        placeSearchCooldownTimer?.invalidate()
+        isPlaceSearchCoolingDown = true
+        placeSearchCooldownTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] timer in
+            guard let self = self, let last = self.lastPlaceSearchTime else { return }
+            let elapsed = Date().timeIntervalSince(last)
+            let remaining = max(0, self.placeSearchCooldown - elapsed)
+            self.placeSearchCooldownRemaining = Int(ceil(remaining))
+            if remaining <= 0 {
+                self.isPlaceSearchCoolingDown = false
+                timer.invalidate()
+            }
+        }
+    }
+    
+    // 回定位點時還原原本定位點的50個景點
+    func restoreOriginalNearbyAttractions() {
+        if let original = currentNearbyAttractions as [NearbyAttraction]? {
+            self.nearbyAttractions = original
         }
     }
 }

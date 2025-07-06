@@ -238,11 +238,6 @@ class NearbyAttractionsModel {
         allSearchResults.removeAll()
         processedAttractions.removeAll()
         
-        print("🎯 Model: 開始按照MVVM規格收集景點數據")
-        print("   - 搜索關鍵字數量: \(tourismKeywords.count)個")
-        print("   - 每個關鍵字收集: 25個結果")
-        print("   - 目標最終數量: 50個最近景點")
-        
         let group = DispatchGroup()
         var completedSearches = 0
         
@@ -254,7 +249,6 @@ class NearbyAttractionsModel {
                 defer { group.leave() }
                 
                 completedSearches += 1
-                print("📍 Model收集: '\(keyword)' -> \(results.count)個結果 (\(completedSearches)/\(self.tourismKeywords.count))")
                 
                 // 將結果加入總集合
                 self.allSearchResults.append(contentsOf: results)
@@ -301,7 +295,6 @@ class NearbyAttractionsModel {
         let search = MKLocalSearch(request: request)
         search.start { response, error in
             if let error = error {
-                print("❌ Model搜索錯誤 '\(keyword)': \(error.localizedDescription)")
                 completion([])
                 return
             }
@@ -337,9 +330,6 @@ class NearbyAttractionsModel {
     
     /// 處理收集到的數據：合併、排序、去重、限制數量
     private func processCollectedData(completion: @escaping ([NearbyAttraction]) -> Void) {
-        print("🔄 Model: 開始處理收集到的數據")
-        print("   - 原始收集結果: \(allSearchResults.count)個")
-        
         // 步驟2a: 按距離排序（由近至遠）
         let sortedResults = allSearchResults.sorted { $0.distanceFromUser < $1.distanceFromUser }
         
@@ -353,16 +343,9 @@ class NearbyAttractionsModel {
         }
         
         let uniqueResults = Array(uniqueAttractions.values).sorted { $0.distanceFromUser < $1.distanceFromUser }
-        print("   - 去重後結果: \(uniqueResults.count)個")
         
         // 步驟2c: 限制為前50個最近的景點
         processedAttractions = Array(uniqueResults.prefix(50))
-        
-        print("✅ Model: 數據處理完成")
-        print("   - 最終景點數量: \(processedAttractions.count)個")
-        if let nearest = processedAttractions.first, let farthest = processedAttractions.last {
-            print("   - 距離範圍: \(Int(nearest.distanceFromUser))m - \(String(format: "%.1f", farthest.distanceFromUser/1000))km")
-        }
         
         completion(processedAttractions)
     }

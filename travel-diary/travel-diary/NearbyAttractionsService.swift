@@ -487,7 +487,7 @@ class NearbyAttractionsService: ObservableObject {
             let url = getCacheFileURL()
             try data.write(to: url)
         } catch {
-            print("保存景點緩存失敗: \(error)")
+            // 保存景點緩存失敗: \(error)
         }
     }
     
@@ -498,7 +498,7 @@ class NearbyAttractionsService: ObservableObject {
             let data = try Data(contentsOf: url)
             return try JSONDecoder().decode(NearbyAttractionsCache.self, from: data)
         } catch {
-            print("讀取景點緩存失敗: \(error)")
+            // 讀取景點緩存失敗: \(error)
             return nil
         }
     }
@@ -521,7 +521,7 @@ class NearbyAttractionsService: ObservableObject {
                 try FileManager.default.removeItem(at: url)
             }
         } catch {
-            print("刪除景點緩存失敗: \(error)")
+            // 刪除景點緩存失敗: \(error)
         }
     }
     
