@@ -143,7 +143,7 @@ struct TravelMapView: View {
         .onReceive(viewModel.$region) { newRegion in
             updateCameraPosition(newRegion)
         }
-        .onChange(of: selectedAttractionID) { newID in
+        .onChange(of: selectedAttractionID) { _, newID in
             if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
                 openAttractionWebSearch(attraction)
                 // 點擊後自動取消選中，避免重複觸發
@@ -185,9 +185,9 @@ struct TravelMapView: View {
                         viewModel.performImmediateSearch()
                         isSearchFocused = false
                     }
-                    .onChange(of: viewModel.searchText) {
+                    .onChange(of: viewModel.searchText) { _, newValue in
                         // HIG: 搜索文字變化時立即顯示搜索界面
-                        viewModel.showingSearchResults = !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        viewModel.showingSearchResults = !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     }
                 
                 // HIG規範：載入和清除按鈕
@@ -1094,7 +1094,7 @@ struct AppleMapLocationWithBeam: View {
             displayAngle = targetAngle
             lastAngle = targetAngle
         }
-        .onChange(of: targetAngle) { newAngle in
+        .onChange(of: targetAngle) { _, newAngle in
             let shortest = shortestAngle(from: lastAngle, to: newAngle)
             let next = lastAngle + shortest
             lastAngle = next.truncatingRemainder(dividingBy: 360)

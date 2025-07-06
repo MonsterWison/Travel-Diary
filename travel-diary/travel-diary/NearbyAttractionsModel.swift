@@ -294,7 +294,7 @@ class NearbyAttractionsModel {
         
         let search = MKLocalSearch(request: request)
         search.start { response, error in
-            if let error = error {
+            if error != nil {
                 completion([])
                 return
             }

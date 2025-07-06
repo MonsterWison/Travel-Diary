@@ -188,7 +188,7 @@ class NearbyAttractionsService: ObservableObject {
                 return
             }
             
-            if let error = error {
+            if error != nil {
                 DispatchQueue.main.async {
                     self.searchError = error
                 }

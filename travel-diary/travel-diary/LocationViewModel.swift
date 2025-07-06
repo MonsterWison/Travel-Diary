@@ -263,8 +263,8 @@ class LocationViewModel: ObservableObject {
     
     private func handleLocationError(_ error: Error?) {
         locationError = error
-        if let error = error {
-            currentAddress = "位置獲取失敗: \(error.localizedDescription)"
+        if error != nil {
+            currentAddress = "位置獲取失敗: \(error!.localizedDescription)"
         }
     }
     
@@ -441,8 +441,8 @@ class LocationViewModel: ObservableObject {
         
         searchCancellable = Future<[SearchResult], Error> { promise in
             search.start { response, error in
-                if let error = error {
-                    promise(.failure(error))
+                if error != nil {
+                    promise(.failure(error!))
                     return
                 }
                 
