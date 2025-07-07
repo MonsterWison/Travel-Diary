@@ -217,6 +217,9 @@ class NearbyAttractionsModel {
     private var allSearchResults: [NearbyAttraction] = []
     private(set) var processedAttractions: [NearbyAttraction] = []
     
+    // 新增：本次搜尋的中心點
+    private var searchCenterCoordinate: CLLocationCoordinate2D?
+    
     // MARK: - 搜索配置（純淨的旅遊關鍵字，不包含垃圾內容）
     private let tourismKeywords = [
         "tourist attraction", "landmark", "museum", "park", "temple",
@@ -233,30 +236,32 @@ class NearbyAttractionsModel {
     /// 4. 去重保留最近的
     /// 5. 限制為前50個
     func searchNearbyAttractions(coordinate: CLLocationCoordinate2D, completion: @escaping ([NearbyAttraction]) -> Void) {
-        
-        // 清空之前的結果
+        #if DEBUG
+        print("[DEBUG][Model] searchNearbyAttractions: center=\(coordinate)")
+        #endif
+        self.searchCenterCoordinate = coordinate
         allSearchResults.removeAll()
         processedAttractions.removeAll()
-        
         let group = DispatchGroup()
         var completedSearches = 0
-        
-        // 步驟1: 收集所有搜索關鍵字的結果
         for keyword in tourismKeywords {
             group.enter()
-            
+            #if DEBUG
+            print("[DEBUG][Model] searchSingleKeyword: \(keyword) at \(coordinate)")
+            #endif
             searchSingleKeyword(keyword: keyword, coordinate: coordinate) { results in
                 defer { group.leave() }
-                
                 completedSearches += 1
-                
-                // 將結果加入總集合
+                #if DEBUG
+                print("[DEBUG][Model] searchSingleKeyword: \(keyword) got \(results.count) results")
+                #endif
                 self.allSearchResults.append(contentsOf: results)
             }
         }
-        
-        // 步驟2: 當所有搜索完成時，進行數據處理
         group.notify(queue: .main) {
+            #if DEBUG
+            print("[DEBUG][Model] All keyword searches complete. Total raw results: \(self.allSearchResults.count)")
+            #endif
             self.processCollectedData(completion: completion)
         }
     }
@@ -282,58 +287,59 @@ class NearbyAttractionsModel {
     
     /// 搜索單個關鍵字，限制25個結果
     private func searchSingleKeyword(keyword: String, coordinate: CLLocationCoordinate2D, completion: @escaping ([NearbyAttraction]) -> Void) {
-        
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = keyword
         request.region = MKCoordinateRegion(
             center: coordinate,
-            latitudinalMeters: 100000, // 100km搜索範圍
+            latitudinalMeters: 100000,
             longitudinalMeters: 100000
         )
         request.resultTypes = [.pointOfInterest]
-        
         let search = MKLocalSearch(request: request)
         search.start { response, error in
             if error != nil {
+                #if DEBUG
+                print("[DEBUG][Model] searchSingleKeyword: \(keyword) error: \(error!)")
+                #endif
                 completion([])
                 return
             }
-            
             guard let response = response else {
+                #if DEBUG
+                print("[DEBUG][Model] searchSingleKeyword: \(keyword) no response")
+                #endif
                 completion([])
                 return
             }
-            
-            // 限制每個關鍵字最多25個結果
             let limitedItems = Array(response.mapItems.prefix(25))
-            
+            let center = self.searchCenterCoordinate ?? coordinate
             let attractions = limitedItems.compactMap { item -> NearbyAttraction? in
                 guard let name = item.name, !name.isEmpty else { return nil }
-                
-                let distance = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                let distance = CLLocation(latitude: center.latitude, longitude: center.longitude)
                     .distance(from: item.placemark.location ?? CLLocation())
-                
                 return NearbyAttraction(
                     id: UUID(),
                     name: name,
-                    description: name, // 簡化為名稱
+                    description: name,
                     coordinate: AttractionsCoordinate(from: item.placemark.coordinate),
                     distanceFromUser: distance,
                     category: self.categorizeByKeyword(keyword: keyword),
                     address: self.formatAddress(item.placemark)
                 )
             }
-            
+            #if DEBUG
+            print("[DEBUG][Model] searchSingleKeyword: \(keyword) final mapped attractions: \(attractions.count)")
+            #endif
             completion(attractions)
         }
     }
     
     /// 處理收集到的數據：合併、排序、去重、限制數量
     private func processCollectedData(completion: @escaping ([NearbyAttraction]) -> Void) {
-        // 步驟2a: 按距離排序（由近至遠）
+        #if DEBUG
+        print("[DEBUG][Model] processCollectedData: allSearchResults=\(allSearchResults.count)")
+        #endif
         let sortedResults = allSearchResults.sorted { $0.distanceFromUser < $1.distanceFromUser }
-        
-        // 步驟2b: 去重（按名稱+地址去重，保留距離最近的）
         var uniqueAttractions: [String: NearbyAttraction] = [:]
         for attraction in sortedResults {
             let key = "\(attraction.name)_\(attraction.address ?? "")"
@@ -341,12 +347,14 @@ class NearbyAttractionsModel {
                 uniqueAttractions[key] = attraction
             }
         }
-        
-        let uniqueResults = Array(uniqueAttractions.values).sorted { $0.distanceFromUser < $1.distanceFromUser }
-        
-        // 步驟2c: 限制為前50個最近的景點
-        processedAttractions = Array(uniqueResults.prefix(50))
-        
+        let uniqueResults = Array(uniqueAttractions.values)
+            .filter { $0.distanceFromUser <= 20000 }
+        let finalResults = uniqueResults.sorted { $0.distanceFromUser < $1.distanceFromUser }
+            .prefix(50)
+        processedAttractions = Array(finalResults)
+        #if DEBUG
+        print("[DEBUG][Model] processCollectedData: uniqueResults=\(uniqueResults.count), finalResults=\(processedAttractions.count)")
+        #endif
         completion(processedAttractions)
     }
     

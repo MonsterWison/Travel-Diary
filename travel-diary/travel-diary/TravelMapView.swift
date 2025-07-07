@@ -121,26 +121,32 @@ struct TravelMapView: View {
             }
         }
         .onAppear {
+            #if DEBUG
+            print("[DEBUG][View] TravelMapView onAppear: setup initial map position, load cache, auto search attractions")
+            #endif
             setupInitialMapPosition()
-            // 用戶要求：每次打開時景點搜尋器應該是縮小狀態
-            // viewModel.attractionPanelState 已在ViewModel初始化時設為 .compact
-            // 用戶要求：每次打開apps都自動搜尋幾十米至20km範圍內50個景點（全球所有國家及地區適用）
-            viewModel.loadAttractionsFromCache()  // 先加載緩存提供即時體驗
-            viewModel.autoSearchAttractionsOnAppStart()  // 自動搜尋最新景點
-            // HIG: 確保應用本地化設置正確
+            viewModel.loadAttractionsFromCache()
+            viewModel.autoSearchAttractionsOnAppStart()
             configureMapLocalization()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            // HIG: 應用進入前台時檢查並觸發必要的搜索
+            #if DEBUG
+            print("[DEBUG][View] App will enter foreground: check attractions on resume")
+            #endif
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 viewModel.checkAttractionsOnAppResume()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-            // HIG: 應用進入後台時自動保存緩存數據
+            #if DEBUG
+            print("[DEBUG][View] App did enter background: save attractions cache")
+            #endif
             viewModel.saveAttractionsToCache()
         }
         .onReceive(viewModel.$region) { newRegion in
+            #if DEBUG
+            print("[DEBUG][View] Map region changed: \(newRegion)")
+            #endif
             updateCameraPosition(newRegion)
         }
         .onChange(of: selectedAttractionID) { _, newID in
@@ -732,59 +738,15 @@ struct TravelMapView: View {
                     .fill(Color.primary.opacity(0.3))
                     .frame(width: 40, height: 5)
                     .padding(.top, 8)
-                
-                if viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden {
-                    // 用戶要求：hidden狀態也顯示緊湊內容
-                    compactModeContent
-                } else {
-                    // 展開狀態標題：左側放大鏡按鈕，置中標題，右側預留空間
-                    HStack {
-                        // 左側手動更新按鈕
-                        Button(action: {
-                            viewModel.manualRefreshAttractions()
-                        }) {
-                            ZStack {
-                                Image(systemName: "location.magnifyingglass")
-                                    .font(.title3)
-                                    .foregroundColor(viewModel.canManualRefresh ? .blue : .gray)
-                                if !viewModel.canManualRefresh {
-                                    Text("\(viewModel.manualRefreshCooldownRemaining)")
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .frame(width: 16, height: 16)
-                                        .background(Circle().fill(Color.red))
-                                        .offset(x: 8, y: -8)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(viewModel.isLoadingAttractions || !viewModel.canManualRefresh)
-                        
-                        Spacer()
-                        
-                        Text("附近景點")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity)
-                            .multilineTextAlignment(.center)
-                        
-                        Spacer()
-                        // 右側預留空間（未來可擴展）
-                        Rectangle()
-                            .frame(width: 32, height: 1)
-                            .opacity(0)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-                }
             }
-            .frame(height: (viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden) ? 80 : 60)
+            .frame(height: 20)
             .frame(maxWidth: .infinity)
-            .contentShape(Rectangle()) // 擴大觸摸區域
-            
-            // 展開模式的內容
+            .contentShape(Rectangle())
+            // 只在 compact/hidden 狀態渲染 compactModeContent
+            if viewModel.attractionPanelState == .compact || viewModel.attractionPanelState == .hidden {
+                compactModeContent
+            }
+            // 只在 expanded 狀態渲染 expandedModeContent
             if viewModel.attractionPanelState == .expanded {
                 expandedModeContent
             }
@@ -861,10 +823,17 @@ struct TravelMapView: View {
                 ProgressView()
                     .scaleEffect(0.8)
             } else {
-                Image(systemName: "chevron.up")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+                Button(action: {
+                    withAnimation(.interactiveSpring()) {
+                        viewModel.attractionPanelState = .expanded
+                    }
+                }) {
+                    Image(systemName: "chevron.up")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
@@ -873,61 +842,101 @@ struct TravelMapView: View {
     
     // MARK: - 展開模式內容
     private var expandedModeContent: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            LazyVStack(spacing: 12) {
-                // 檢查是否正在手動更新
-                if viewModel.isManualRefreshing {
-                    // 手動更新中的大型居中顯示
-                    VStack(spacing: 20) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundColor(.orange)
-                            
-                            Text("更新中...")
-                                .font(.title)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.orange)
+        VStack(spacing: 0) {
+            // HIG: 展開狀態標題區域，左側手動更新、置中標題、右側下箭頭
+            HStack {
+                // 左側手動更新按鈕
+                Button(action: {
+                    viewModel.manualRefreshAttractions()
+                }) {
+                    ZStack {
+                        Image(systemName: "location.magnifyingglass")
+                            .font(.title3)
+                            .foregroundColor(viewModel.canManualRefresh ? .blue : .gray)
+                        if !viewModel.canManualRefresh {
+                            Text("\(viewModel.manualRefreshCooldownRemaining)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(width: 16, height: 16)
+                                .background(Circle().fill(Color.red))
+                                .offset(x: 8, y: -8)
                         }
                     }
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isLoadingAttractions || !viewModel.canManualRefresh)
+                .frame(width: 32, height: 32)
+                Spacer()
+                Text("附近景點")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 80)
-                } else if viewModel.nearbyAttractions.isEmpty && !viewModel.isLoadingAttractions {
-                    // 空狀態
-                    VStack(spacing: 16) {
-                        Image(systemName: "location.magnifyingglass")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        
-                        Text("附近沒有找到景點")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("嘗試移動到其他區域搜索")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.center)
+                Spacer()
+                // 右側下箭頭
+                Button(action: {
+                    withAnimation(.interactiveSpring()) {
+                        viewModel.attractionPanelState = .compact
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
-                } else {
+                }) {
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 32, height: 32)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            // 原有展開內容
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(spacing: 12) {
+                    if viewModel.isManualRefreshing {
+                        VStack(spacing: 20) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(.orange)
+                                Text("更新中...")
+                                    .font(.title)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 80)
+                        VStack(spacing: 16) {
+                            Image(systemName: "location.magnifyingglass")
+                                .font(.system(size: 48))
+                                .foregroundColor(.secondary)
+                            Text("附近沒有找到景點")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text("嘗試移動到其他區域搜索")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 60)
+                    }
                     ForEach(viewModel.nearbyAttractions) { attraction in
                         ExpandedAttractionCard(attraction: attraction)
                             .environmentObject(viewModel)
                             .onTapGesture {
-                                // 僅高亮地圖，不進入詳情頁
                                 viewModel.focusOnAttraction(attraction)
                             }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 34)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 34) // 考慮Home Indicator
+            .frame(maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity)
     }
-    
-
     
     // MARK: - 底部按鈕位置計算
     private func calculateBottomPadding() -> CGFloat {

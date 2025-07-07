@@ -200,29 +200,21 @@ class LocationViewModel: ObservableObject {
     }
     
     private func handleLocationUpdate(_ location: CLLocation?) {
+        #if DEBUG
+        print("[DEBUG] handleLocationUpdate: location=\(String(describing: location?.coordinate))")
+        #endif
         guard let location = location else { return }
-        
         currentLocation = location
-        
-        // 定位更新時自動反查行政區並快取
         updateRegionInfoCache(for: location)
-        
-        // 檢查是否為固定的香港位置
         if isFixedHongKongLocation(location) {
             currentAddress = "香港新界將軍澳彩明苑彩富閣"
         }
-        
-        // 僅首次定位時自動跟隨地圖（app啟動）
         let isFirstRealLocation = !hasReceivedFirstRealLocation
         if isFirstRealLocation {
-            // HIG: 首次位置使用1公里級別
             updateMapRegion(to: location.coordinate, span: Self.cityLevelSpan)
             hasReceivedFirstRealLocation = true
-            userHasMovedMap = false // 重置用戶移動標記
+            userHasMovedMap = false
         }
-        // 其餘自動定位更新不再自動移動地圖
-        
-        // 獲取地址信息（只有在非固定位置時才進行地理編碼）
         if !isFixedHongKongLocation(location) {
             locationService.getAddressFromLocation(location) { [weak self] address in
                 DispatchQueue.main.async {
@@ -230,12 +222,11 @@ class LocationViewModel: ObservableObject {
                 }
             }
         }
-        
-        // HIG: 智能景點搜索觸發邏輯
         if isFirstRealLocation {
+            #if DEBUG
+            print("[DEBUG] handleLocationUpdate: first real location, trigger searchNearbyAttractions")
+            #endif
             searchNearbyAttractions()
-        } else {
-            // 檢查是否需要重新搜索（應用重啟或長時間未搜索時）
             checkAndTriggerAttractionsSearchIfNeeded()
         }
     }
@@ -555,28 +546,26 @@ class LocationViewModel: ObservableObject {
     
     // HIG: 移動地圖到指定位置（支持不同縮放級別）
     func moveToLocation(coordinate: CLLocationCoordinate2D, zoomLevel: ZoomLevel = .neighborhood) {
+        #if DEBUG
+        print("[DEBUG] moveToLocation: coordinate=\(coordinate), zoomLevel=\(zoomLevel)")
+        #endif
         isProgrammaticUpdate = true
-        
-        // HIG: 使用平滑動畫移動地圖
+        let newSpan = zoomLevel.span
         withAnimation(.easeInOut(duration: 1.0)) {
             region = MKCoordinateRegion(
                 center: coordinate,
-                span: zoomLevel.span
+                span: newSpan
             )
         }
-        
-        // 延遲重置程序化更新標記
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        lastKnownMapCenter = coordinate
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
             self.isProgrammaticUpdate = false
         }
-        
-        // 標記用戶已移動地圖（如果不是移動到當前位置）
         if let currentLocation = currentLocation {
             let currentCoordinate = currentLocation.coordinate
             let distance = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
                 .distance(from: CLLocation(latitude: currentCoordinate.latitude, longitude: currentCoordinate.longitude))
-            
-            if distance > 100 { // 如果距離超過100米，標記為用戶移動
+            if distance > 100 {
                 userHasMovedMap = true
             }
         }
@@ -585,23 +574,34 @@ class LocationViewModel: ObservableObject {
     // MARK: - MVVM: ViewModel從Model獲取數據
     /// MVVM架構：ViewModel從Model獲取處理好的景點數據
     func searchNearbyAttractions() {
+        #if DEBUG
+        print("[DEBUG] searchNearbyAttractions: currentLocation=\(String(describing: currentLocation?.coordinate)) isLoadingAttractions=\(isLoadingAttractions)")
+        #endif
         guard let location = currentLocation else { 
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractions: currentLocation is nil, abort.")
+            #endif
             return 
         }
         guard !isLoadingAttractions else {
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractions: already loading, abort.")
+            #endif
             return
         }
         isLoadingAttractions = true
-        // 每次新一輪搜尋前，清除暫存的50個景點
         currentNearbyAttractions.removeAll()
-        // MVVM: ViewModel使用Model來處理業務邏輯
         let attractionsModel = NearbyAttractionsModel()
+        #if DEBUG
+        print("[DEBUG] searchNearbyAttractions: start model search at \(location.coordinate)")
+        #endif
         attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                // 暫存本次定位的50個景點
+                #if DEBUG
+                print("[DEBUG] searchNearbyAttractions: model returned \(processedAttractions.count) attractions")
+                #endif
                 self.currentNearbyAttractions = processedAttractions
-                // ViewModel從Model獲取處理好的數據
                 self.nearbyAttractions = processedAttractions
                 self.isLoadingAttractions = false
                 if !processedAttractions.isEmpty {
@@ -914,82 +914,84 @@ class LocationViewModel: ObservableObject {
     
     /// 用戶要求：每次打開apps時自動搜尋幾十米至20km範圍內50個景點（公開方法供View調用）
     func autoSearchAttractionsOnAppStart() {
-        // 用戶要求：面板始終保持縮小狀態
-        
-        // 檢查位置服務狀態
+        #if DEBUG
+        print("[DEBUG] autoSearchAttractionsOnAppStart: currentLocation=\(String(describing: currentLocation?.coordinate))")
+        #endif
         if currentLocation == nil {
             locationService.requestLocationPermission()
             locationService.startLocationUpdates()
-            
-            // 延遲搜尋，等待位置更新
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 if self.currentLocation != nil {
+                    #if DEBUG
+                    print("[DEBUG] autoSearchAttractionsOnAppStart: got location after delay, searching...")
+                    #endif
                     self.searchNearbyAttractions()
                 } else {
-                    // 再次嘗試
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         if self.currentLocation != nil {
+                            #if DEBUG
+                            print("[DEBUG] autoSearchAttractionsOnAppStart: got location after second delay, searching...")
+                            #endif
                             self.searchNearbyAttractions()
                         } else {
-                            // 無法獲取位置，景點搜尋暫停
+                            #if DEBUG
+                            print("[DEBUG] autoSearchAttractionsOnAppStart: still no location, abort.")
+                            #endif
                         }
                     }
                 }
             }
         } else {
-            // 立即搜尋景點
+            #if DEBUG
+            print("[DEBUG] autoSearchAttractionsOnAppStart: already have location, searching...")
+            #endif
             searchNearbyAttractions()
         }
     }
     
     /// 手動更新景點搜索（用戶點擊左下角放大鏡圖標時觸發）
     func manualRefreshAttractions() {
-        // 檢查冷卻期：防止過於頻繁的MKLocalSearch API調用
+        #if DEBUG
+        print("[DEBUG] manualRefreshAttractions: currentLocation=\(String(describing: currentLocation?.coordinate))")
+        #endif
         let now = Date()
         if let lastRefresh = lastManualRefreshTime {
             let timeSinceLastRefresh = now.timeIntervalSince(lastRefresh)
             if timeSinceLastRefresh < manualRefreshCooldown {
+                #if DEBUG
+                print("[DEBUG] manualRefreshAttractions: cooldown active, abort.")
+                #endif
                 return
             }
         }
-        
-        // 檢查位置服務狀態
         guard let location = currentLocation else {
+            #if DEBUG
+            print("[DEBUG] manualRefreshAttractions: currentLocation is nil, abort.")
+            #endif
             return
         }
-        
-        // 記錄手動更新時間
         lastManualRefreshTime = now
-        
-        // 啟動倒數計時器
         startCooldownTimer()
-        
-        // 強制刷新景點搜索（繞過緩存）
-        
-        // 清除當前景點數據，確保顯示載入狀態
         isLoadingAttractions = true
-        isManualRefreshing = true // 標示開始手動更新
+        isManualRefreshing = true
         isUsingCachedData = false
-        
-        // MVVM: ViewModel使用Model來處理業務邏輯（遵循現有代碼模式）
         let attractionsModel = NearbyAttractionsModel()
+        #if DEBUG
+        print("[DEBUG] manualRefreshAttractions: start model search at \(location.coordinate)")
+        #endif
         attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                
+                #if DEBUG
+                print("[DEBUG] manualRefreshAttractions: model returned \(processedAttractions.count) attractions")
+                #endif
                 self.nearbyAttractions = processedAttractions
                 self.isLoadingAttractions = false
-                self.isManualRefreshing = false // 標示手動更新完成
-                
+                self.isManualRefreshing = false
                 if !processedAttractions.isEmpty {
-                    // 標記為最新數據（非緩存）
                     self.isUsingCachedData = false
-                    
-                    // 保存到緩存
                     self.autoSaveAttractionsToCache()
-                    
                 } else {
-                    // 即使沒有找到景點，也要結束手動更新狀態
                     self.isManualRefreshing = false
                 }
             }
@@ -1159,9 +1161,14 @@ class LocationViewModel: ObservableObject {
     
     // 新增：地點搜尋冷卻與自動搜尋附近景點
     private func searchNearbyAttractionsForPlace(coordinate: CLLocationCoordinate2D) {
+        #if DEBUG
+        print("[DEBUG] searchNearbyAttractionsForPlace: coordinate=\(coordinate)")
+        #endif
         let now = Date()
         if let last = lastPlaceSearchTime, now.timeIntervalSince(last) < placeSearchCooldown {
-            // 冷卻中，不觸發API
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractionsForPlace: cooldown active, abort.")
+            #endif
             startPlaceSearchCooldownTimer()
             return
         }
@@ -1172,11 +1179,16 @@ class LocationViewModel: ObservableObject {
         startPlaceSearchCooldownTimer()
         isLoadingAttractions = true
         let attractionsModel = NearbyAttractionsModel()
+        #if DEBUG
+        print("[DEBUG] searchNearbyAttractionsForPlace: start model search at \(coordinate)")
+        #endif
         attractionsModel.searchNearbyAttractions(coordinate: coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                #if DEBUG
+                print("[DEBUG] searchNearbyAttractionsForPlace: model returned \(processedAttractions.count) attractions")
+                #endif
                 var attractions = processedAttractions
-                // 新增：確保搜尋地點本身也在景點列表內
                 if let selected = self.selectedSearchResult {
                     let alreadyIncluded = attractions.contains { attr in
                         attr.name == selected.name &&

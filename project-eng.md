@@ -467,4 +467,13 @@ flowchart TD
 - ✅ **Perfect compilation status**: BUILD SUCCEEDED, no Swift errors or warnings.
 - ✅ **Functionality integrity guaranteed**: All existing features 100% preserved, only API syntax updated.
 
+### 🆕 Stage 3.5.4 (2025-07-08)
+- ✅ **Nearby attractions panel (expanded state) header HIG compliance**:
+  - Header area (title + chevron + manual refresh button) in expanded state now fully follows Apple HIG, perfectly aligned with compact state.
+  - Fixed duplicate title, missing button, and alignment issues.
+  - Guaranteed that compact/hidden state, panel drag, cooldown, map, cards, bottom buttons, and all other features remain unchanged.
+- ✅ **Code quality assurance**: Only expandedModeContent was changed, no other UI/logic touched.
+- ✅ **Restore point created**: Stage 3.5.4, full archive ready.
+- ✅ **Ready for GitHub sync**.
+
 ---
