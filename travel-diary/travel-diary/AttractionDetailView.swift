@@ -66,14 +66,46 @@ struct AttractionDetailView: View {
                     }
 
                     // 詳細介紹
-                    if !viewModel.description.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
+                    if !viewModel.description.isEmpty || viewModel.isWikiSearching {
+                        VStack(alignment: .leading, spacing: 12) {
                             Text("景點介紹")
                                 .font(.title3.bold())
+                                .accessibilityAddTraits(.isHeader)
                                 .padding(.bottom, 2)
-                            Text(viewModel.description)
-                                .font(.body)
-                                .foregroundColor(.primary)
+                            ZStack(alignment: .bottomTrailing) {
+                                if viewModel.isWikiSearching {
+                                    HStack {
+                                        Spacer()
+                                        ProgressView("搜尋中…")
+                                            .font(.body)
+                                            .foregroundColor(.secondary)
+                                            .padding(.vertical, 24)
+                                        Spacer()
+                                    }
+                                } else {
+                                    Text(viewModel.descriptionTextOnly)
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                        .multilineTextAlignment(.leading)
+                                        .padding(16)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .fill(Color(.secondarySystemBackground))
+                                        )
+                                    if let source = viewModel.descriptionSource, !source.isEmpty {
+                                        VStack(alignment: .trailing, spacing: 0) {
+                                            Divider()
+                                            Text(source)
+                                                .font(.footnote)
+                                                .foregroundColor(.secondary)
+                                                .padding(.top, 4)
+                                                .padding(.trailing, 8)
+                                                .accessibilityLabel("資料來源：" + source)
+                                        }
+                                        .padding(.bottom, 4)
+                                    }
+                                }
+                            }
                         }
                         .padding(.top, 8)
                     }
@@ -94,7 +126,17 @@ struct AttractionDetailView: View {
             .padding(.leading, 16)
         }
         .background(Color(.systemBackground))
-        .onAppear { viewModel.fetchDetailIfNeeded() }
+        .onAppear {
+            viewModel.fetchDetailIfNeeded()
+            viewModel.onFallbackWebSearch = {
+                // 關閉詳情頁並通知主視圖開啟 WebSearch
+                presentationMode.wrappedValue.dismiss()
+                NotificationCenter.default.post(name: NSNotification.Name("AttractionFallbackWebSearch"), object: viewModel.name)
+            }
+        }
+        .onDisappear {
+            viewModel.onFallbackWebSearch = nil
+        }
         .overlay(
             Group {
                 if viewModel.isLoading {
@@ -108,11 +150,17 @@ struct AttractionDetailView: View {
                 } else if let error = viewModel.error {
                     ZStack {
                         Color.black.opacity(0.08).ignoresSafeArea()
-                        Text(error)
-                            .font(.title3)
-                            .foregroundColor(.red)
-                            .padding(32)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        VStack(spacing: 16) {
+                            Text(error)
+                                .font(.title3)
+                                .foregroundColor(.red)
+                            if viewModel.isLoading == false && viewModel.error != nil {
+                                ProgressView("正在自動搜尋其他資料來源...")
+                                    .font(.body)
+                            }
+                        }
+                        .padding(32)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
                 }
             }

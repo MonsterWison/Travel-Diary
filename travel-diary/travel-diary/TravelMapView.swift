@@ -12,6 +12,8 @@ struct TravelMapView: View {
     @State private var webSearchURL: URL? = nil
     @State private var showingWebSearch = false
     @State private var isRegionInfoLoading: Bool = false
+    @State private var selectedAttraction: NearbyAttraction? = nil
+    @State private var pendingWebSearchQuery: String? = nil
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -128,6 +130,11 @@ struct TravelMapView: View {
             viewModel.loadAttractionsFromCache()
             viewModel.autoSearchAttractionsOnAppStart()
             configureMapLocalization()
+            NotificationCenter.default.addObserver(forName: NSNotification.Name("AttractionFallbackWebSearch"), object: nil, queue: .main) { notif in
+                if let name = notif.object as? String {
+                    pendingWebSearchQuery = name
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             #if DEBUG
@@ -151,10 +158,35 @@ struct TravelMapView: View {
         }
         .onChange(of: selectedAttractionID) { _, newID in
             if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
-                openAttractionWebSearch(attraction)
-                // 點擊後自動取消選中，避免重複觸發
+                selectedAttraction = attraction
                 selectedAttractionID = nil
             }
+        }
+        .onChange(of: selectedAttraction) { _, newValue in
+            if let id = newValue?.id, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
+                selectedAttraction = attraction
+            } else if newValue == nil, let query = pendingWebSearchQuery {
+                // 詳情頁已關閉，這時才開 WebSearch（延遲 0.4 秒，確保動畫結束）
+                let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+                viewModel.getCachedOrFreshRegionInfo { regionInfo in
+                    let urlString: String
+                    if regionInfo.isMainlandChina {
+                        urlString = "https://www.baidu.com/s?wd=\(encoded)"
+                    } else {
+                        urlString = "https://www.google.com/search?q=\(encoded)"
+                    }
+                    if let url = URL(string: urlString) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            webSearchURL = url
+                            showingWebSearch = true
+                        }
+                    }
+                    pendingWebSearchQuery = nil
+                }
+            }
+        }
+        .sheet(item: $selectedAttraction) { attraction in
+            AttractionDetailView(viewModel: AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation))
         }
         .fullScreenCover(isPresented: $showingWebSearch) {
             if let url = webSearchURL {
