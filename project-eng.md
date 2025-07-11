@@ -477,3 +477,17 @@ flowchart TD
 - ✅ **Ready for GitHub sync**.
 
 ---
+
+### 🟦 Stage 3.6 Restore Point (July 6, 2025)
+
+#### Major Updates
+- **Wikipedia API query cooldown and caching**: Minimum 1 second between queries to avoid API blocking, with ProgressView 'Searching…' indicator for HIG-compliant UX.
+- **Detail view fallback UX fully fixed**: When Wikipedia has no data, the detail view shows 'Searching other sources…' and, after animation, automatically jumps to Google/Baidu search—completely eliminating blank page issues.
+- **Wikipedia summary block HIG/MapKit standard**: Place description block uses Apple Maps Place Card style, with separated title, body, and source, full accessibility support, and all spacing, color, font, corner radius, and padding strictly per HIG.
+- **Full MVVM architecture, data separation, caching, and cooldown logic.**
+- **All code packaged as Travel-Diary-Stage-3.6.zip as a complete restore point.**
+
+#### Restore Point Command
+- `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
+
+---

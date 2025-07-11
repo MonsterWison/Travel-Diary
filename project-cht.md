@@ -573,3 +573,17 @@ flowchart TD
 - ✅ **準備同步至GitHub**。
 
 ---
+
+### 🟦 Stage 3.6 還原點（2025年7月6日）
+
+#### 主要更新內容
+- **Wikipedia API 查詢冷卻與快取**：每次查詢間隔最少 1 秒，避免 API 封鎖，並於查詢時顯示 ProgressView「搜尋中…」提示，UX 完全符合 Apple HIG。
+- **詳情頁 fallback UX 完全修正**：當 Wikipedia 查無資料時，詳情頁會顯示「正在自動搜尋其他資料來源...」提示，並等動畫結束後自動跳轉 Google/Baidu 搜尋，徹底解決空白頁問題。
+- **Wikipedia 簡介區塊 HIG/MapKit 標準**：景點介紹區塊採用 Apple Maps Place Card 樣式，標題、主體、資料來源分離，無障礙支援，所有 spacing、顏色、字級、圓角、padding 嚴格依照 HIG。
+- **全程 MVVM 架構、資料分層、快取與冷卻機制**。
+- **全部程式碼已封包並建立 Travel-Diary-Stage-3.6.zip，可作為完整還原點。**
+
+#### 還原點建立指令
+- `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
+
+---
