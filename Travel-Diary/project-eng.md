@@ -491,3 +491,11 @@ flowchart TD
 - `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
 
 ---
+
+# Version Stage 3.6.2
+
+- Fixed initial blank fallback WebView (Google/Baidu) by adding 0.1s async delay (per Apple HIG/MVVM/MapKit/SwiftUI best practices).
+- WebView now shows clear error message on load failure, not just blank.
+- Prevented multiple fallback triggers for more stable UI.
+- If initial blank still occurs, moving the device resolves it.
+- Restore point created.

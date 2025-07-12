@@ -587,3 +587,11 @@ flowchart TD
 - `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
 
 ---
+
+# 版本 Stage 3.6.2
+
+- fallback WebView（Google/Baidu）初次顯示空白問題已修正，加入 0.1 秒 async delay。
+- WebView 載入失敗時會顯示錯誤訊息。
+- 防止多次 fallback，UI 更穩定。
+- 若初次仍空白，移動手機可解決。
+- 已建立 restore point。
