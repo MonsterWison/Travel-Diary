@@ -12,6 +12,27 @@ class AttractionDetailViewModel: ObservableObject {
     @Published var address: String = ""
     @Published var description: String = ""
     @Published var isWikiSearching: Bool = false
+    
+    // Wikipedia API 欄位
+    @Published var wikiType: String = ""
+    @Published var displayTitle: String = ""
+    @Published var namespace: [String: Any] = [:]
+    @Published var wikibaseItem: String = ""
+    @Published var titles: [String: Any] = [:]
+    @Published var pageid: Int = 0
+    @Published var lang: String = ""
+    @Published var dir: String = ""
+    @Published var revision: String = ""
+    @Published var tid: String = ""
+    @Published var timestamp: String = ""
+    @Published var wikiDescriptionSource: String = ""
+    @Published var contentUrls: [String: Any] = [:]
+    @Published var extractHtml: String = ""
+    @Published var normalizedTitle: String = ""
+    @Published var originalImage: [String: Any] = [:]
+    @Published var coordinates: [String: Any] = [:]
+    @Published var pageProps: [String: Any] = [:]
+    
     var descriptionTextOnly: String {
         if let range = description.range(of: "\n\n資料來源：") {
             return String(description[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -56,8 +77,8 @@ class AttractionDetailViewModel: ObservableObject {
 
     func fetchDetailIfNeeded() {
         hasFallbackTriggered = false // 每次進入時重設 fallback flag
-        // 冷卻判斷
         let now = Date()
+        print("[LOG] fetchDetailIfNeeded called at \(now)")
         if let last = Self.lastWikiQueryTime, now.timeIntervalSince(last) < Self.wikiCooldown {
             print("[Wiki] 冷卻中，跳過查詢")
             return
@@ -66,6 +87,7 @@ class AttractionDetailViewModel: ObservableObject {
         isWikiSearching = true
         let cacheKey = baseAttraction.id.uuidString
         if Self.lastCacheKey != cacheKey {
+            print("[LOG] Cache miss, clear detailCache")
             Self.detailCache.removeAll()
             Self.lastCacheKey = cacheKey
         }
@@ -76,11 +98,11 @@ class AttractionDetailViewModel: ObservableObject {
             self.distance = cached.distance
             self.address = cached.address
             self.description = cached.description
+            print("[LOG] Cache hit, returning early")
             return
         }
         isLoading = true
         error = nil
-        // 1. 優先查詢 Wikipedia API
         let queryTitle = baseAttraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? baseAttraction.name
         let urlStr = "https://zh.wikipedia.org/api/rest_v1/page/summary/\(queryTitle)"
         print("[Wiki] 發送 API 請求: \(urlStr)")
@@ -109,7 +131,9 @@ class AttractionDetailViewModel: ObservableObject {
                 }
                 return
             }
+            print("[LOG] Wikipedia API 回傳內容: \(dict)")
             let summary = dict["extract"] as? String ?? ""
+            print("[LOG] Wikipedia summary: \(summary)")
             let title = dict["title"] as? String ?? self.baseAttraction.name
             let thumbnail = (dict["thumbnail"] as? [String: Any])?["source"] as? String
             let description = summary.isEmpty ? "" : summary + "\n\n資料來源：維基百科"
@@ -140,7 +164,7 @@ class AttractionDetailViewModel: ObservableObject {
             return
         }
         hasFallbackTriggered = true
-        print("[Fallback] 觸發 fallback WebSearch，準備通知 View 層")
+        print("[Fallback] 觸發 fallback WebSearch，準備通知 View 層 (dismiss 詳情頁)")
         DispatchQueue.main.async {
             self.isLoading = false
             self.onFallbackWebSearch?()
