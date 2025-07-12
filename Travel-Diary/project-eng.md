@@ -491,3 +491,16 @@ flowchart TD
 - `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
 
 ---
+
+### 🟦 Latest Restore Point: Stage 3.6.1 (2025-07-12)
+
+- 🛠️ **Fixed AttractionDetailViewModel blank-flash bug**
+    - All ViewModel state switching and creation is now handled in `.onChange(of: selectedAttraction)`, with all side effects removed from `.sheet`, fully following SwiftUI state management best practices.
+    - Solved the issue where attraction details would briefly appear then disappear due to async overwrites.
+    - UI/UX, data flow, and interaction strictly follow Apple HIG, MapKit Place Card, MVVM, pydantic, and SwiftUI standards.
+- 🏷️ **Restore point created: Travel-Diary-Stage-3.6.1.zip**
+    - Full archive of all code, project settings, assets, tests, and backups.
+    - Can revert to this stable state at any time.
+- 📱 **Successfully built and installed on iPhone 'Monster', fully tested and working.**
+
+---

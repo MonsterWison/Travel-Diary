@@ -587,3 +587,16 @@ flowchart TD
 - `zip -r Travel-Diary-Stage-3.6.zip travel-diary/`
 
 ---
+
+### 🟦 最新還原點 Stage 3.6.1（2025年7月12日）
+
+- 🛠️ **修正 AttractionDetailViewModel 重建閃現空白 bug**
+    - 將所有 ViewModel 狀態切換與建立集中於 `.onChange(of: selectedAttraction)`，徹底移除 `.sheet` 內的副作用，完全符合 SwiftUI 狀態管理最佳實踐。
+    - 解決景點介紹資料先出現後又消失的異步覆蓋問題。
+    - UI/UX、資料流、互動嚴格遵守 Apple HIG、MapKit Place Card、MVVM、pydantic、SwiftUI 標準。
+- 🏷️ **建立 restore point：Travel-Diary-Stage-3.6.1.zip**
+    - 完整封存所有程式碼、專案設定、資產、測試、備份。
+    - 可隨時回復至本穩定狀態。
+- 📱 **已成功 build 並安裝到 iPhone「Monster」實機測試，運作正常。**
+
+---
