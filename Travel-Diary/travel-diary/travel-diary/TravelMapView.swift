@@ -14,6 +14,8 @@ struct TravelMapView: View {
     @State private var isRegionInfoLoading: Bool = false
     @State private var selectedAttraction: NearbyAttraction? = nil
     @State private var pendingWebSearchQuery: String? = nil
+    // 新增：詳情頁ViewModel cache
+    @State private var detailViewModel: AttractionDetailViewModel? = nil
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -110,11 +112,7 @@ struct TravelMapView: View {
         }
         .navigationTitle("旅遊日誌")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    menuButton
-                }
-            }
+            .navigationBarItems(trailing: menuButton)
             .alert("需要位置權限", isPresented: $viewModel.showingLocationAlert) {
                 locationPermissionAlert
             }
@@ -159,12 +157,19 @@ struct TravelMapView: View {
         .onChange(of: selectedAttractionID) { _, newID in
             if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
                 selectedAttraction = attraction
-                selectedAttractionID = nil
+                // 只有id不同才new新的ViewModel
+                if detailViewModel?.baseAttraction.id != id {
+                    detailViewModel = AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation)
+                }
             }
         }
         .onChange(of: selectedAttraction) { _, newValue in
             if let id = newValue?.id, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
                 selectedAttraction = attraction
+                // 只有id不同才new新的ViewModel
+                if detailViewModel?.baseAttraction.id != id {
+                    detailViewModel = AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation)
+                }
             } else if newValue == nil, let query = pendingWebSearchQuery {
                 // 詳情頁已關閉，這時才開 WebSearch（延遲 0.4 秒，確保動畫結束）
                 let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
@@ -183,10 +188,18 @@ struct TravelMapView: View {
                     }
                     pendingWebSearchQuery = nil
                 }
+                // 關閉詳情時清空ViewModel
+                detailViewModel = nil
             }
         }
         .sheet(item: $selectedAttraction) { attraction in
-            AttractionDetailView(viewModel: AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation))
+            // 僅根據現有的 detailViewModel 渲染，不做任何副作用
+            if let vm = detailViewModel, vm.baseAttraction.id == attraction.id {
+                AttractionDetailView(viewModel: vm)
+            } else {
+                // fallback：若 detailViewModel 尚未建立，建立臨時ViewModel（理論上不會發生）
+                AttractionDetailView(viewModel: AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation))
+            }
         }
         .fullScreenCover(isPresented: $showingWebSearch) {
             if let url = webSearchURL {
