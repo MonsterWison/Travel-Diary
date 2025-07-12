@@ -32,6 +32,7 @@ class AttractionDetailViewModel: ObservableObject {
     private static var lastCacheKey: String? = nil
     private static var lastWikiQueryTime: Date? = nil
     private static let wikiCooldown: TimeInterval = 1.0 // 1 秒冷卻
+    private var hasFallbackTriggered = false
 
     /// 用於通知View層fallback到WebSearch
     var onFallbackWebSearch: (() -> Void)? = nil
@@ -54,6 +55,7 @@ class AttractionDetailViewModel: ObservableObject {
     }
 
     func fetchDetailIfNeeded() {
+        hasFallbackTriggered = false // 每次進入時重設 fallback flag
         // 冷卻判斷
         let now = Date()
         if let last = Self.lastWikiQueryTime, now.timeIntervalSince(last) < Self.wikiCooldown {
@@ -133,6 +135,12 @@ class AttractionDetailViewModel: ObservableObject {
     }
 
     private func triggerFallbackWebSearch() {
+        guard !hasFallbackTriggered else {
+            print("[Fallback] 已經觸發過 fallback，忽略重複呼叫")
+            return
+        }
+        hasFallbackTriggered = true
+        print("[Fallback] 觸發 fallback WebSearch，準備通知 View 層")
         DispatchQueue.main.async {
             self.isLoading = false
             self.onFallbackWebSearch?()

@@ -129,7 +129,7 @@ struct AttractionDetailView: View {
         .onAppear {
             viewModel.fetchDetailIfNeeded()
             viewModel.onFallbackWebSearch = {
-                // 關閉詳情頁並通知主視圖開啟 WebSearch
+                print("[Fallback] View 層收到 fallback，關閉詳情頁並通知主視圖")
                 presentationMode.wrappedValue.dismiss()
                 NotificationCenter.default.post(name: NSNotification.Name("AttractionFallbackWebSearch"), object: viewModel.name)
             }

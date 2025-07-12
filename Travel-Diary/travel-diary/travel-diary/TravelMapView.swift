@@ -132,6 +132,7 @@ struct TravelMapView: View {
             configureMapLocalization()
             NotificationCenter.default.addObserver(forName: NSNotification.Name("AttractionFallbackWebSearch"), object: nil, queue: .main) { notif in
                 if let name = notif.object as? String {
+                    print("[Fallback] 主視圖收到 fallback 通知，pendingWebSearchQuery = \(name)")
                     pendingWebSearchQuery = name
                 }
             }
@@ -171,12 +172,15 @@ struct TravelMapView: View {
                 viewModel.getCachedOrFreshRegionInfo { regionInfo in
                     let urlString: String
                     if regionInfo.isMainlandChina {
+                        print("[Fallback] 地區判斷為中國大陸，使用 Baidu 搜尋")
                         urlString = "https://www.baidu.com/s?wd=\(encoded)"
                     } else {
+                        print("[Fallback] 地區判斷為非中國大陸，使用 Google 搜尋")
                         urlString = "https://www.google.com/search?q=\(encoded)"
                     }
                     if let url = URL(string: urlString) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            print("[Fallback] 開啟 WebView: \(urlString)")
                             webSearchURL = url
                             showingWebSearch = true
                         }
@@ -1521,9 +1525,46 @@ import WebKit
 struct WebSearchViewController: UIViewControllerRepresentable {
     let url: URL
     let onClose: () -> Void
+    
+    class Coordinator: NSObject, WKNavigationDelegate {
+        let onClose: () -> Void
+        var errorView: UILabel?
+        init(onClose: @escaping () -> Void) {
+            self.onClose = onClose
+        }
+        @objc func closeTapped() {
+            onClose()
+        }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            showError(webView: webView, error: error)
+        }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            showError(webView: webView, error: error)
+        }
+        private func showError(webView: WKWebView, error: Error) {
+            DispatchQueue.main.async {
+                // 移除舊的 errorView
+                self.errorView?.removeFromSuperview()
+                let label = UILabel()
+                label.text = "無法載入網頁\n" + error.localizedDescription
+                label.textAlignment = .center
+                label.numberOfLines = 0
+                label.textColor = .red
+                label.backgroundColor = .white
+                label.frame = webView.bounds
+                label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                webView.addSubview(label)
+                self.errorView = label
+            }
+        }
+    }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onClose: onClose)
+    }
     func makeUIViewController(context: Context) -> UINavigationController {
         let webVC = UIViewController()
         let webView = WKWebView()
+        webView.navigationDelegate = context.coordinator
         webView.translatesAutoresizingMaskIntoConstraints = false
         webVC.view.addSubview(webView)
         NSLayoutConstraint.activate([
@@ -1546,16 +1587,4 @@ struct WebSearchViewController: UIViewControllerRepresentable {
         return nav
     }
     func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onClose: onClose)
-    }
-    class Coordinator: NSObject {
-        let onClose: () -> Void
-        init(onClose: @escaping () -> Void) {
-            self.onClose = onClose
-        }
-        @objc func closeTapped() {
-            onClose()
-        }
-    }
 } 
