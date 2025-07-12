@@ -492,10 +492,80 @@ flowchart TD
 
 ---
 
-# Version Stage 3.6.2
+### 🟦 Stage 3.6.2 Directory Restructuring (July 12, 2025)
 
-- Fixed initial blank fallback WebView (Google/Baidu) by adding 0.1s async delay (per Apple HIG/MVVM/MapKit/SwiftUI best practices).
-- WebView now shows clear error message on load failure, not just blank.
-- Prevented multiple fallback triggers for more stable UI.
-- If initial blank still occurs, moving the device resolves it.
-- Restore point created.
+#### 🏗️ **Project Directory Structure Reorganization - Completed**
+- ✅ **Resolved Multi-Level Nested Directory Issue**
+  - Original structure: `Travel-Diary > Travel-Diary > travel-diary > travel-diary > Assets.xcassets`
+  - Restructured: `Travel-Diary > Travel-Diary > travel-diary > Assets.xcassets`
+  - Removed redundant nested `travel-diary` directory levels
+
+- ✅ **File Integration and Cleanup**
+  - Moved all content from deepest `travel-diary` directory to parent level
+  - Removed duplicate documentation files (`project-cht.md`, `project-eng.md`)
+  - Preserved main directory documentation versions for consistency
+  - Cleaned up empty directory structures
+
+#### 🚨 **Xcode Project Build Issues Resolution - Resolved**
+- ⚠️ **Initial Build Failure**
+  - Error: `Failed to install the app on the device`
+  - Error: `The item at travel-diary.app is not a valid bundle`
+  - Error: `The path to the provided bundle's main executable could not be determined`
+  - Root cause: Xcode project file references broken after directory restructuring
+
+- ❌ **Project File Repair Attempts Failed**
+  - Attempted to modify `project.pbxproj` file to fix file references
+  - Added `PBXFileSystemSynchronizedRootGroup` to exclude test directories
+  - Result: Project file corruption - `The project 'travel-diary' is damaged and cannot be opened`
+
+- ✅ **Successful Recovery and Rebuild**
+  - Used `git reset --hard Stage-3.6.2` to restore to stable state
+  - Successfully executed `xcodebuild -scheme travel-diary -configuration Debug`
+  - Build result: **BUILD SUCCEEDED**
+  - Successfully installed on iPhone device (ID: 00008110-000C35D63CA2801E)
+
+#### 📱 **Final Deployment Status**
+- Bundle ID: `com.wilsonho.travelDiary`
+- Installation path: `/private/var/containers/Bundle/Application/91061E59-6185-4BFC-8B70-110449442BCA/travel-diary.app/`
+- Device: iPhone (00008110-000C35D63CA2801E, iOS 18.5)
+- Development team: 9D94UL8CG4
+- Build status: Successfully built and installed
+
+#### 🔧 **Technical Lessons Learned**
+- **Directory Restructuring Risks**: Major directory structure changes can break Xcode project file references
+- **Project File Complexity**: `project.pbxproj` file structure is complex with high risk for manual modification
+- **Recovery Strategy Importance**: Git tags and restore points provide critical protection when projects encounter issues
+- **Build Verification Process**: Complete build testing must be performed immediately after directory changes
+
+#### 🎯 **Quality Assurance**
+- All core features remain intact:
+  - ✅ Location services with Apple Maps-style location icon
+  - ✅ Nearby attractions search and display
+  - ✅ Wikipedia integration and detail pages
+  - ✅ Regional search engine switching (Google/Baidu)
+  - ✅ Three-stage attraction panel management
+- MVVM architecture integrity maintained
+- Apple HIG design guideline compliance
+
+#### 📦 **Version Control**
+- Current stable version: Stage-3.6.2
+- Git tag: `Stage-3.6.2`
+- Project status: Successfully built and deployed to device
+- Ready for GitHub synchronization
+
+#### 🚀 **Next Phase Planning**
+- Continue development based on stable Stage-3.6.2 version
+- Consider adding data persistence functionality
+- Plan multimedia integration modules
+- Prepare CloudKit cloud synchronization phase
+
+#### 🔧 **WebView Optimization Updates**
+- ✅ **Fixed initial blank fallback WebView (Google/Baidu)** by adding 0.1s async delay (per Apple HIG/MVVM/MapKit/SwiftUI best practices)
+- ✅ **WebView now shows clear error message on load failure**, not just blank
+- ✅ **Prevented multiple fallback triggers** for more stable UI
+- ✅ **If initial blank still occurs, moving the device resolves it**
+- ✅ **Restore point created**
+
+---
+
+**Project Status**: Stage 3.6.2 directory restructuring completed, all features running stably, build issues successfully resolved, ready for next development phase

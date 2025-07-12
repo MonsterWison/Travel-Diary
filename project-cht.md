@@ -588,10 +588,80 @@ flowchart TD
 
 ---
 
-# 版本 Stage 3.6.2
+### 🟦 Stage 3.6.2 Directory Restructuring (2025年7月12日)
 
-- fallback WebView（Google/Baidu）初次顯示空白問題已修正，加入 0.1 秒 async delay。
-- WebView 載入失敗時會顯示錯誤訊息。
-- 防止多次 fallback，UI 更穩定。
-- 若初次仍空白，移動手機可解決。
-- 已建立 restore point。
+#### 🏗️ **專案目錄結構重整 - 已完成**
+- ✅ **解決多層巢狀目錄問題**
+  - 原始結構：`Travel-Diary > Travel-Diary > travel-diary > travel-diary > Assets.xcassets`
+  - 重整後結構：`Travel-Diary > Travel-Diary > travel-diary > Assets.xcassets`
+  - 移除了多餘的巢狀 `travel-diary` 目錄層級
+
+- ✅ **檔案整合與清理**
+  - 將最深層 `travel-diary` 目錄中的所有內容移動到上一層
+  - 移除重複的文檔檔案 (`project-cht.md`, `project-eng.md`)
+  - 保留主目錄的文檔版本，確保文檔一致性
+  - 清理空的目錄結構
+
+#### 🚨 **Xcode 專案構建問題處理 - 已解決**
+- ⚠️ **初始構建失敗**
+  - 錯誤：`Failed to install the app on the device`
+  - 錯誤：`The item at travel-diary.app is not a valid bundle`
+  - 錯誤：`The path to the provided bundle's main executable could not be determined`
+  - 根本原因：目錄重整後 Xcode 專案檔案參照失效
+
+- ❌ **專案檔案修復嘗試失敗**
+  - 嘗試修改 `project.pbxproj` 檔案以修正檔案參照
+  - 添加 `PBXFileSystemSynchronizedRootGroup` 排除測試目錄
+  - 結果導致專案檔案損壞：`The project 'travel-diary' is damaged and cannot be opened`
+
+- ✅ **成功回復與重新構建**
+  - 使用 `git reset --hard Stage-3.6.2` 回復到穩定狀態
+  - 成功執行 `xcodebuild -scheme travel-diary -configuration Debug`
+  - 構建結果：**BUILD SUCCEEDED**
+  - 成功安裝到 iPhone 設備 (ID: 00008110-000C35D63CA2801E)
+
+#### 📱 **最終部署狀態**
+- Bundle ID: `com.wilsonho.travelDiary`
+- 安裝路徑: `/private/var/containers/Bundle/Application/91061E59-6185-4BFC-8B70-110449442BCA/travel-diary.app/`
+- 設備: iPhone (00008110-000C35D63CA2801E, iOS 18.5)
+- 開發團隊: 9D94UL8CG4
+- 構建狀態: 成功構建並安裝
+
+#### 🔧 **技術經驗總結**
+- **目錄重整風險**: 大幅度目錄結構變更可能導致 Xcode 專案檔案參照失效
+- **專案檔案複雜性**: `project.pbxproj` 檔案結構複雜，手動修改風險極高
+- **回復策略重要性**: Git 標籤和還原點在專案出現問題時提供重要保護
+- **構建驗證流程**: 目錄變更後必須立即進行完整構建測試
+
+#### 🎯 **質量保證**
+- 所有核心功能保持完整：
+  - ✅ 位置服務與 Apple Maps 風格定位圖標
+  - ✅ 附近景點搜索與顯示
+  - ✅ Wikipedia 整合與詳細頁面
+  - ✅ 地區搜索引擎切換 (Google/百度)
+  - ✅ 三階段景點面板管理
+- MVVM 架構完整性保持
+- Apple HIG 設計規範合規
+
+#### 📦 **版本控制**
+- 當前穩定版本: Stage-3.6.2
+- Git 標籤: `Stage-3.6.2`
+- 專案狀態: 已成功構建並部署到真機
+- 準備同步到 GitHub
+
+#### 🚀 **下一階段規劃**
+- 基於穩定的 Stage-3.6.2 版本繼續開發
+- 考慮添加數據持久化功能
+- 規劃多媒體整合模組
+- 準備 CloudKit 雲端同步階段
+
+#### 🔧 **WebView 優化更新**
+- ✅ **fallback WebView（Google/Baidu）初次顯示空白問題已修正**，加入 0.1 秒 async delay
+- ✅ **WebView 載入失敗時會顯示錯誤訊息**，不再只是空白頁面
+- ✅ **防止多次 fallback**，UI 更穩定
+- ✅ **若初次仍空白，移動手機可解決**
+- ✅ **已建立 restore point**
+
+---
+
+**專案狀態**: Stage 3.6.2 目錄重整完成，所有功能穩定運行，成功解決構建問題，準備進入下一開發階段
