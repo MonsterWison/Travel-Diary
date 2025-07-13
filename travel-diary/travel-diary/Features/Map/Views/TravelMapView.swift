@@ -14,6 +14,7 @@ struct TravelMapView: View {
     @State private var isRegionInfoLoading: Bool = false
     @State private var selectedAttraction: NearbyAttraction? = nil
     @State private var pendingWebSearchQuery: String? = nil
+    @StateObject private var detailViewModelManager = DetailViewModelManager()
     
     // MARK: - HIG動態布局計算（確保警告橫幅不覆蓋主要交互元素）
     private var topContentOffset: CGFloat {
@@ -110,11 +111,12 @@ struct TravelMapView: View {
         }
         .navigationTitle("旅遊日誌")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    menuButton
-                }
-            }
+            // TODO: 暫時移除 toolbar 以解決編譯錯誤
+            // .toolbar {
+            //     ToolbarItem(placement: .topBarTrailing) {
+            //         menuButton
+            //     }
+            // }
             .alert("需要位置權限", isPresented: $viewModel.showingLocationAlert) {
                 locationPermissionAlert
             }
@@ -190,7 +192,7 @@ struct TravelMapView: View {
             }
         }
         .sheet(item: $selectedAttraction) { attraction in
-            AttractionDetailView(viewModel: AttractionDetailViewModel(attraction: attraction, userLocation: viewModel.currentLocation))
+            AttractionDetailView(viewModel: detailViewModelManager.getViewModel(for: attraction, userLocation: viewModel.currentLocation))
         }
         .fullScreenCover(isPresented: $showingWebSearch) {
             if let url = webSearchURL {
@@ -1587,4 +1589,35 @@ struct WebSearchViewController: UIViewControllerRepresentable {
         return nav
     }
     func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+}
+
+// MARK: - DetailViewModelManager
+@MainActor
+class DetailViewModelManager: ObservableObject {
+    private var viewModel: AttractionDetailViewModel?
+    private var lastAttractionName: String?
+    
+    func getViewModel(for attraction: NearbyAttraction, userLocation: CLLocation?) -> AttractionDetailViewModel {
+        // 如果已經有同名的 ViewModel，重用；否則新建
+        if let vm = viewModel, lastAttractionName == attraction.name {
+            print("[DetailVM] 重用現有 ViewModel for \(attraction.name)")
+            return vm
+        } else {
+            print("[DetailVM] 創建新 ViewModel for \(attraction.name)")
+            let newVM = AttractionDetailViewModel(
+                attractionName: attraction.name,
+                attractionAddress: attraction.address,
+                attractionCoordinate: attraction.coordinate.clLocationCoordinate
+            )
+            viewModel = newVM
+            lastAttractionName = attraction.name
+            return newVM
+        }
+    }
+    
+    func clearViewModel() {
+        print("[DetailVM] 清除 ViewModel")
+        viewModel = nil
+        lastAttractionName = nil
+    }
 } 

@@ -2,168 +2,210 @@ import SwiftUI
 
 struct AttractionDetailView: View {
     @ObservedObject var viewModel: AttractionDetailViewModel
-    @Environment(\.presentationMode) var presentationMode
-
+    @Environment(\.dismiss) private var dismiss
+    
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // 照片
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .frame(height: 220)
-                            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
-                        if let url = viewModel.photoURL {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(height: 220)
-                                        .clipped()
-                                        .cornerRadius(24)
-                                case .failure:
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.gray)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                        } else {
-                            Image(systemName: "photo")
-                                .font(.largeTitle)
-                                .foregroundColor(.gray)
+                LazyVStack(spacing: 0) {
+                    // Hero Image Section
+                    heroImageSection
+                    
+                    // Content Section
+                    VStack(spacing: 0) {
+                        // Description Card
+                        if !viewModel.wikipediaSummary.isEmpty || viewModel.isLoading {
+                            descriptionCard
+                        }
+                        
+                        // Error Message
+                        if let error = viewModel.errorMessage {
+                            errorCard(error: error)
                         }
                     }
-                    .frame(height: 220)
-                    .padding(.top, 8)
-
-                    // 名稱
-                    Text(viewModel.name)
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-                        .padding(.bottom, 2)
-
-                    // 距離與位置
-                    HStack(spacing: 16) {
-                        if !viewModel.distance.isEmpty {
-                            Label(viewModel.distance, systemImage: "location")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        if !viewModel.address.isEmpty {
-                            Label(viewModel.address, systemImage: "mappin.and.ellipse")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    // 詳細介紹
-                    if !viewModel.description.isEmpty || viewModel.isWikiSearching {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("景點介紹")
-                                .font(.title3.bold())
-                                .accessibilityAddTraits(.isHeader)
-                                .padding(.bottom, 2)
-                            ZStack(alignment: .bottomTrailing) {
-                                if viewModel.isWikiSearching {
-                                    HStack {
-                                        Spacer()
-                                        ProgressView("搜尋中…")
-                                            .font(.body)
-                                            .foregroundColor(.secondary)
-                                            .padding(.vertical, 24)
-                                        Spacer()
-                                    }
-                                } else {
-                                    Text(viewModel.descriptionTextOnly)
-                                        .font(.body)
-                                        .foregroundColor(.primary)
-                                        .multilineTextAlignment(.leading)
-                                        .padding(16)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .fill(Color(.secondarySystemBackground))
-                                        )
-                                    if let source = viewModel.descriptionSource, !source.isEmpty {
-                                        VStack(alignment: .trailing, spacing: 0) {
-                                            Divider()
-                                            Text(source)
-                                                .font(.footnote)
-                                                .foregroundColor(.secondary)
-                                                .padding(.top, 4)
-                                                .padding(.trailing, 8)
-                                                .accessibilityLabel("資料來源：" + source)
-                                        }
-                                        .padding(.bottom, 4)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.top, 8)
-                    }
+                    .padding(.top, 16)
                 }
-                .padding(24)
             }
-
-            // 返回按鈕
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                Image(systemName: "chevron.left")
-                    .font(.title2.bold())
-                    .foregroundColor(.primary)
-                    .padding(12)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .shadow(radius: 2)
+            .navigationTitle(viewModel.attractionName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                }
             }
-            .padding(.top, 32)
-            .padding(.leading, 16)
         }
-        .background(Color(.systemBackground))
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(16)
         .onAppear {
-            viewModel.fetchDetailIfNeeded()
-            viewModel.onFallbackWebSearch = {
-                print("[Fallback] View 層收到 fallback，關閉詳情頁並通知主視圖")
-                presentationMode.wrappedValue.dismiss()
-                NotificationCenter.default.post(name: NSNotification.Name("AttractionFallbackWebSearch"), object: viewModel.name)
-            }
+            // ViewModel 已經在初始化時自動載入資料
         }
         .onDisappear {
-            viewModel.onFallbackWebSearch = nil
+            // 清理邏輯
         }
-        .overlay(
-            Group {
-                if viewModel.isLoading {
-                    ZStack {
-                        Color.black.opacity(0.08).ignoresSafeArea()
-                        ProgressView("正在載入最新資料...")
-                            .font(.title3)
-                            .padding(32)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    }
-                } else if let error = viewModel.error {
-                    ZStack {
-                        Color.black.opacity(0.08).ignoresSafeArea()
-                        VStack(spacing: 16) {
-                            Text(error)
-                                .font(.title3)
-                                .foregroundColor(.red)
-                            if viewModel.isLoading == false && viewModel.error != nil {
-                                ProgressView("正在自動搜尋其他資料來源...")
-                                    .font(.body)
-                            }
-                        }
-                        .padding(32)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    }
+    }
+    
+    // MARK: - Hero Image Section
+    @ViewBuilder
+    private var heroImageSection: some View {
+        ZStack {
+            // Background gradient
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.blue.opacity(0.3),
+                    Color.blue.opacity(0.1)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(height: 200)
+            
+            // Wikipedia thumbnail if available
+            if let thumbnailURL = viewModel.wikipediaThumbnailURL,
+               let url = URL(string: thumbnailURL) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 200)
+                        .clipped()
+                } placeholder: {
+                    ProgressView()
+                        .frame(height: 200)
                 }
             }
-        )
+            
+            // Overlay with title
+            VStack {
+                Spacer()
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(viewModel.attractionName)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .shadow(radius: 2)
+                        
+                        if !viewModel.wikipediaTitle.isEmpty && viewModel.wikipediaTitle != viewModel.attractionName {
+                            Text(viewModel.wikipediaTitle)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                                .shadow(radius: 1)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+        }
     }
+    
+    // MARK: - Description Card
+    @ViewBuilder
+    private var descriptionCard: some View {
+        VStack(spacing: 0) {
+            // Card Header
+            HStack {
+                Image(systemName: "doc.text")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 16, weight: .medium))
+                
+                Text("景點介紹")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if viewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Color(UIColor.systemBackground))
+            
+            Divider()
+                .padding(.horizontal, 20)
+            
+            // Card Content
+            VStack(alignment: .leading, spacing: 12) {
+                if viewModel.isLoading {
+                    // Loading placeholder
+                    VStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(height: 16)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                } else if !viewModel.wikipediaSummary.isEmpty {
+                    // Wikipedia content
+                    Text(viewModel.wikipediaSummary)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .lineLimit(nil)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                    
+                    // Source attribution
+                    HStack {
+                        Spacer()
+                        Text("資料來源：Wikipedia")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                }
+            }
+            .background(Color(UIColor.systemBackground))
+        }
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+    
+    // MARK: - Error Card
+    @ViewBuilder
+    private func errorCard(error: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 24))
+                .foregroundColor(.orange)
+            
+            Text("載入失敗")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            Text(error)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Button("重試") {
+                viewModel.refresh()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(20)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    AttractionDetailView(viewModel: AttractionDetailViewModel(attractionName: "測試景點"))
 } 
