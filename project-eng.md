@@ -608,3 +608,64 @@ travel-diary/
 - All directory restructuring, restore point, documentation, and tags have been pushed to GitHub
 
 ---
+
+## Stage 3.6.3 (2025-07-13)
+
+- **MVVM Architecture Reorganization Complete**: All files have been reorganized into Features/, Services/, Models/, Resources/ folders, following modern iOS development best practices.
+- **Complete Functionality Preserved**: Map, attraction queries, Wiki API, WebSearch fallback, and all other features work perfectly.
+- **Xcode Project Validation**: Compilation, deployment, and iPhone real-device testing all passed.
+- **GitHub Synchronization**: All changes have been committed and pushed to the remote repository.
+
+---
+
+## Main Features (Following Stage 3.6.2)
+- Map Core: SwiftUI Map with support for custom attractions, path points, search, panels, cooldown, positioning, heading beam, and complete functionality.
+- Regional Search Engine Switch: Mainland China (excluding Hong Kong, Macau, Taiwan) uses Baidu; all other regions use Google.
+- Embedded Web Search: WKWebView fullscreen with top-left HIG-standard chevron.left back button.
+- Heading Beam: Shortest-path compensation with smooth animation.
+- Complete cache, cooldown, manual refresh, panel expand/collapse, UI/UX all strictly HIG-compliant.
+
+---
+
+## Code Quality
+- All files have been reorganized according to MVVM architecture, improving maintainability and scalability.
+- Fully compliant with Apple Human Interface Guidelines (HIG) and MVVM architecture standards.
+- Clear code structure with distinct layer responsibilities, suitable for enterprise-level development.
+
+---
+
+## Packaging & Restore Point
+- Git tag: `stage-3.6.3`
+- Package file: Travel-Diary-Stage-3.6.3.zip
+- Restore point: This version has completed MVVM architecture reorganization and can serve as a stable foundation for future feature development.
+
+### 🆕 Stage 3.7.1 (2025-07-13)
+
+- **Multi-language Wikipedia API Support**: Resolved the limitation of only querying Chinese Wikipedia, now supporting global attraction queries.
+- **8-Language Fallback Mechanism**: zh → en → ja → es → fr → de → ko → it, intelligent language switching.
+- **Language Source Annotation**: Clearly displays the source language (e.g., "Wikipedia (English)").
+- **Global Attraction Coverage**: Supports attractions in Asia, Europe, Americas, Oceania, Africa, and all global regions.
+- **Complete Performance Optimization**: Maintains original cache, cooldown, error handling mechanisms, with added language index tracking.
+
+---
+
+## Main Features (Stage 3.7.1)
+- **Multi-language Wiki Queries**: Prioritizes Chinese queries, automatically falls back to other languages, ensuring global attractions can find data.
+- **Intelligent Language Switching**: Automatically tries the next language on failure until data is found or all languages are exhausted.
+- **Language Source Annotation**: Clearly displays the source language, improving user experience.
+- **Complete Original Functionality**: Map, search, WebSearch fallback, and other features work perfectly.
+
+---
+
+## Technical Highlights
+- **Global Attraction Support**: Expanded from supporting only Hong Kong/Chinese-speaking regions to supporting all global attractions.
+- **Multi-language API Integration**: Seamless integration of Wikipedia APIs in 8 major languages.
+- **Intelligent Fallback Mechanism**: Ensures maximum probability of finding attraction data.
+- **Performance Optimization**: Maintains original cache mechanism, avoiding duplicate queries.
+
+---
+
+## Packaging & Restore Point
+- Git tag: `Stage-3.7.1`
+- Package file: Travel-Diary-Stage-3.7.1.zip
+- Restore point: This version has completely resolved the Wiki API regional limitation issue and is now a truly international travel diary app.
