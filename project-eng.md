@@ -569,3 +569,42 @@ flowchart TD
 ---
 
 **Project Status**: Stage 3.6.2 directory restructuring completed, all features running stably, build issues successfully resolved, ready for next development phase
+
+# 🆕 Stage 3.6.3 MVVM Architecture Final Restructure (2025-07-13)
+
+### 🏗️ Key Updates
+- ✅ Completed all directory cleanup, leaving only a single clean travel-diary directory. All nested and duplicate folders removed.
+- ✅ Refactored all code into App, Features, Services, Models, Resources folders according to Apple HIG, MVVM, MapKit, and Cursor Rules. Each Feature/View/ViewModel/Model is in its own folder.
+- ✅ Xcode project verified: BUILD SUCCEEDED, deploys directly to iPhone, developer account and signing settings fully preserved.
+- ✅ All file references, Xcode project links, Bundle ID, and Provisioning Profile remain intact.
+- ✅ Created Stage 3.6.3 restore point (zip archive + documentation), and synced to GitHub.
+- ✅ Created Git tag: Stage-3.6.3.
+
+### 📁 Final Project Structure
+```
+travel-diary/
+├── travel-diary/
+│   ├── App/ (travel_diaryApp.swift, ContentView.swift)
+│   ├── Features/
+│   │   ├── Map/ (Views, ViewModels, Models)
+│   │   ├── AttractionDetail/ (Views, ViewModels, Models)
+│   │   └── Search/ (reserved for future)
+│   ├── Services/ (LocationService.swift, NearbyAttractionsService.swift)
+│   ├── Models/ (NearbyAttractionsModel.swift)
+│   └── Resources/ (Assets.xcassets, AppIcon.svg, NearbyAttractionsCache.sample.json)
+```
+
+### 🛡️ Restore Point
+- Archive: Travel-Diary-Stage-3.6.3.zip
+- Git tag: Stage-3.6.3
+- Full details in STAGE-3.6.3-RESTORE-POINT.md
+
+### 🚀 Deployment Verification
+- Xcode project opens, builds, and installs on iPhone without issues
+- All features, UI, data flow, permissions, signing, and account settings are intact
+- Fully compliant with Apple HIG, MVVM, MapKit, Cursor Rules
+
+### 🔄 GitHub Sync
+- All directory restructuring, restore point, documentation, and tags have been pushed to GitHub
+
+---
