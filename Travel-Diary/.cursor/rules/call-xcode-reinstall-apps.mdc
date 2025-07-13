@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-讓xcode重新安裝apps到我iphone上以更新更改，並執行apps來顯示結果
