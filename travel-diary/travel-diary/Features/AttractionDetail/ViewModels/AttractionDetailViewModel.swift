@@ -33,6 +33,10 @@ class AttractionDetailViewModel: ObservableObject {
     private static var lastWikiQueryTime: Date? = nil
     private static let wikiCooldown: TimeInterval = 1.0 // 1 秒冷卻
     private var hasFallbackTriggered = false
+    
+    // 多語言 Wikipedia API 支援
+    private let wikiLanguages = ["zh", "en", "ja", "es", "fr", "de", "ko", "it"]
+    private var currentLanguageIndex = 0
 
     /// 用於通知View層fallback到WebSearch
     var onFallbackWebSearch: (() -> Void)? = nil
@@ -56,6 +60,8 @@ class AttractionDetailViewModel: ObservableObject {
 
     func fetchDetailIfNeeded() {
         hasFallbackTriggered = false // 每次進入時重設 fallback flag
+        currentLanguageIndex = 0 // 重設語言索引
+        
         // 冷卻判斷
         let now = Date()
         if let last = Self.lastWikiQueryTime, now.timeIntervalSince(last) < Self.wikiCooldown {
@@ -80,58 +86,101 @@ class AttractionDetailViewModel: ObservableObject {
         }
         isLoading = true
         error = nil
-        // 1. 優先查詢 Wikipedia API
-        let queryTitle = baseAttraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? baseAttraction.name
-        let urlStr = "https://zh.wikipedia.org/api/rest_v1/page/summary/\(queryTitle)"
-        print("[Wiki] 發送 API 請求: \(urlStr)")
-        guard let url = URL(string: urlStr) else {
-            print("[Wiki] URL 解析失敗，fallback 到 WebSearch")
+        
+        // 開始多語言 Wikipedia API 查詢
+        searchWikipediaMultiLanguage()
+    }
+    
+    private func searchWikipediaMultiLanguage() {
+        guard currentLanguageIndex < wikiLanguages.count else {
+            print("[Wiki] 所有語言都查詢完畢，fallback 到 WebSearch")
             self.triggerFallbackWebSearch()
             return
         }
+        
+        let currentLang = wikiLanguages[currentLanguageIndex]
+        let queryTitle = baseAttraction.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? baseAttraction.name
+        let urlStr = "https://\(currentLang).wikipedia.org/api/rest_v1/page/summary/\(queryTitle)"
+        print("[Wiki] 嘗試語言 [\(currentLang)] 發送 API 請求: \(urlStr)")
+        
+        guard let url = URL(string: urlStr) else {
+            print("[Wiki] URL 解析失敗，嘗試下一個語言")
+            currentLanguageIndex += 1
+            searchWikipediaMultiLanguage()
+            return
+        }
+        
         let task = URLSession.shared.dataTask(with: url) { data, response, err in
             if let err = err {
-                print("[Wiki] API 請求失敗: \(err.localizedDescription)，fallback 到 WebSearch")
+                print("[Wiki] [\(currentLang)] API 請求失敗: \(err.localizedDescription)，嘗試下一個語言")
                 DispatchQueue.main.async {
-                    self.error = "Wikipedia API 請求失敗：\(err.localizedDescription)"
-                    self.isWikiSearching = false
-                    self.triggerFallbackWebSearch()
+                    self.currentLanguageIndex += 1
+                    self.searchWikipediaMultiLanguage()
                 }
                 return
             }
+            
             guard let data = data,
                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                print("[Wiki] 回傳資料格式錯誤，fallback 到 WebSearch")
+                print("[Wiki] [\(currentLang)] 回傳資料格式錯誤，嘗試下一個語言")
                 DispatchQueue.main.async {
-                    self.error = "Wikipedia API 回傳資料格式錯誤"
-                    self.isWikiSearching = false
-                    self.triggerFallbackWebSearch()
+                    self.currentLanguageIndex += 1
+                    self.searchWikipediaMultiLanguage()
                 }
                 return
             }
+            
             let summary = dict["extract"] as? String ?? ""
             let title = dict["title"] as? String ?? self.baseAttraction.name
             let thumbnail = (dict["thumbnail"] as? [String: Any])?["source"] as? String
-            let description = summary.isEmpty ? "" : summary + "\n\n資料來源：維基百科"
+            
             DispatchQueue.main.async {
                 if summary.isEmpty {
-                    print("[Wiki] 查無 summary，fallback 到 WebSearch")
-                    self.isWikiSearching = false
-                    self.triggerFallbackWebSearch()
+                    print("[Wiki] [\(currentLang)] 查無 summary，嘗試下一個語言")
+                    self.currentLanguageIndex += 1
+                    self.searchWikipediaMultiLanguage()
                     return
                 }
-                print("[Wiki] 取得 Wikipedia 資料: \(title)")
+                
+                // 成功找到資料！
+                print("[Wiki] [\(currentLang)] 取得 Wikipedia 資料: \(title)")
+                let languageName = self.getLanguageDisplayName(currentLang)
+                let description = summary + "\n\n資料來源：Wikipedia (\(languageName))"
+                
                 self.photoURL = thumbnail != nil ? URL(string: thumbnail!) : nil
                 self.name = title
                 self.distance = self.calcDistanceString()
                 self.address = self.baseAttraction.address ?? ""
                 self.description = description
-                Self.detailCache[cacheKey] = AttractionDetailCache(photoURL: self.photoURL, name: self.name, distance: self.distance, address: self.address, description: self.description)
+                
+                let cacheKey = self.baseAttraction.id.uuidString
+                Self.detailCache[cacheKey] = AttractionDetailCache(
+                    photoURL: self.photoURL,
+                    name: self.name,
+                    distance: self.distance,
+                    address: self.address,
+                    description: self.description
+                )
+                
                 self.isWikiSearching = false
                 self.isLoading = false
             }
         }
         task.resume()
+    }
+    
+    private func getLanguageDisplayName(_ langCode: String) -> String {
+        switch langCode {
+        case "zh": return "中文"
+        case "en": return "English"
+        case "ja": return "日本語"
+        case "es": return "Español"
+        case "fr": return "Français"
+        case "de": return "Deutsch"
+        case "ko": return "한국어"
+        case "it": return "Italiano"
+        default: return langCode.uppercased()
+        }
     }
 
     private func triggerFallbackWebSearch() {
