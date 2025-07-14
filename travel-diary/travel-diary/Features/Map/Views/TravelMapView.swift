@@ -1667,26 +1667,23 @@ extension TravelMapView {
     /// - Parameter attraction: 要檢查的景點
     /// - Returns: 是否有Wikipedia資料
     private func hasWikipediaData(_ attraction: NearbyAttraction) -> Bool {
-        // 檢查是否有詳細描述或其他Wikipedia相關資料
-        // 這裡可以根據實際需求調整檢查邏輯
+        // 檢查是否有基本的景點資料
+        // 根據實際的搜索結果調整檢查邏輯
         
-        // 暫時的檢查邏輯：
-        // 1. 檢查是否有詳細描述
-        // 2. 檢查名稱是否不是預設值
-        // 3. 檢查是否有地址資訊
+        // 基本檢查邏輯：
+        // 1. 檢查名稱是否有效（不是空字符串且不是預設值）
+        // 2. 景點有基本的座標信息
         
-        let hasDescription = attraction.description != "未知景點" && 
-                           !attraction.description.isEmpty &&
-                           attraction.description != attraction.name
+        let hasValidName = !attraction.name.isEmpty && 
+                          attraction.name != "未知景點" &&
+                          attraction.name.trimmingCharacters(in: .whitespacesAndNewlines).count > 0
         
-        let hasValidName = attraction.name != "未知景點" && 
-                          !attraction.name.isEmpty
+        // 檢查座標是否有效
+        let hasValidCoordinate = attraction.coordinate.latitude != 0.0 && 
+                               attraction.coordinate.longitude != 0.0
         
-        let hasAddress = attraction.address != nil && 
-                        !attraction.address!.isEmpty
-        
-        // 如果有描述且名稱有效，則認為有Wikipedia資料
-        return hasDescription && hasValidName && hasAddress
+        // 基本條件：有效名稱和有效座標
+        return hasValidName && hasValidCoordinate
     }
     
     /// 分階段搜尋進度指示器
