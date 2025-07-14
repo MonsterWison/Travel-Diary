@@ -1,7 +1,7 @@
 ## English Version
 
 ### 1. Project Overview
-This project aims to develop an iOS travel journal application based on MVVM architecture, featuring a dual-mode storage solution (local CoreData + iCloud sync), map positioning, multimedia recording, and automated content generation.
+This project aims to develop an iOS travel attraction finder application based on MVVM architecture, featuring a dual-mode storage solution (local CoreData + iCloud sync), map positioning, multimedia recording, and automated content generation.
 
 ### 2. Technical Architecture
 - **Development Environment**: Xcode + SwiftUI

@@ -1,9 +1,9 @@
-# Project Proposal: Travel Journal App with MVVM Architecture
+# Project Proposal: Travel Attraction Finder App with MVVM Architecture
 
 ## 繁體中文版本
 
 ### 1. 專案概述
-本專案旨在開發一款基於MVVM架構的iOS旅行日誌應用程式，結合雙模態儲存方案（本地CoreData + iCloud雲端同步），提供地圖定位、多媒體記錄及自動內容生成功能。
+本專案旨在開發一款基於MVVM架構的iOS旅遊景點搜尋器應用程式，結合雙模態儲存方案（本地CoreData + iCloud雲端同步），提供地圖定位、多媒體記錄及自動內容生成功能。
 
 ### 2. 技術架構
 - **開發環境**: Xcode + SwiftUI

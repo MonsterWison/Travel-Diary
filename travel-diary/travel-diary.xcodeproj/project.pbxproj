@@ -398,8 +398,8 @@
 				DEVELOPMENT_TEAM = 9D94UL8CG4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "旅遊日誌";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來記錄旅行路徑和標記重要地點，為您提供個人化的旅行日誌體驗。";
+				INFOPLIST_KEY_CFBundleDisplayName = "旅遊景點搜尋器";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來搜尋附近的旅遊景點，為您提供個人化的景點搜尋體驗。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,8 +432,8 @@
 				DEVELOPMENT_TEAM = 9D94UL8CG4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "旅遊日誌";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來記錄旅行路徑和標記重要地點，為您提供個人化的旅行日誌體驗。";
+				INFOPLIST_KEY_CFBundleDisplayName = "旅遊景點搜尋器";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來搜尋附近的旅遊景點，為您提供個人化的景點搜尋體驗。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

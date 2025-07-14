@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 import WebKit
 
-/// 旅遊日誌主視圖 - 符合 HIG 設計規範
+/// 旅遊景點搜尋器主視圖 - 符合 HIG 設計規範
 struct TravelMapView: View {
     @StateObject private var viewModel = LocationViewModel()
     @State private var showingAddPointAlert = false
@@ -109,7 +109,7 @@ struct TravelMapView: View {
                     .shadow(radius: 8)
             }
         }
-        .navigationTitle("旅遊日誌")
+                        .navigationTitle("旅遊景點搜尋器")
             .navigationBarTitleDisplayMode(.inline)
             // TODO: 暫時移除 toolbar 以解決編譯錯誤
             // .toolbar {
