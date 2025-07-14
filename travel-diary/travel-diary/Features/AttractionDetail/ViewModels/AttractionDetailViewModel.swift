@@ -12,6 +12,8 @@ class AttractionDetailViewModel: ObservableObject {
     @Published var wikipediaThumbnailURL: String? = nil
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var attractionCandidates: [AttractionCache] = []
+    @Published var attractionsManagementVM = AttractionsManagementViewModel()
     
     private let wikipediaCache = WikipediaCache.shared
     // 全球通用的語言優先級 - 英文優先，適用於國際性應用
@@ -31,6 +33,11 @@ class AttractionDetailViewModel: ObservableObject {
         }
         if let coord = attractionCoordinate {
             print("[DetailVM] 景點坐標: \(coord.latitude), \(coord.longitude)")
+        }
+        // 嚴格：如果已有正確資料，直接 return
+        if !self.wikipediaTitle.isEmpty && !self.wikipediaSummary.isEmpty {
+            print("[DetailVM] 已有正確 Wikipedia 資料，跳過查詢")
+            return
         }
         loadWikipediaData()
     }
@@ -201,19 +208,23 @@ class AttractionDetailViewModel: ObservableObject {
         nameScore: Double
     ) async {
         print("[Wiki] 🏆 處理最佳結果: \(data.title) (語言: \(language), 分數: \(nameScore))")
-        
-        // 如果名稱匹配度很高（>0.8），跳過地址驗證以節省時間
-        if nameScore > 0.8 {
-            print("[Wiki] ⚡ 高質量匹配，跳過地址驗證")
+        let hasOverlap = hasSubstantialWordOverlap(
+            attractionName: attractionName,
+            wikipediaTitle: data.title
+        )
+        let mainQuery = extractMainPlaceName(attractionName)
+        let mainWiki = extractMainPlaceName(data.title)
+        let queryWords = mainWords(attractionName)
+        let wikiWords = mainWords(data.title)
+        let intersection = queryWords.intersection(wikiWords)
+        if intersection.count >= 2 {
             await MainActor.run {
                 self.wikipediaTitle = data.title
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] ✅ 成功載入高質量 Wikipedia 資料: \(data.title)")
+                print("[Wiki] ✅ 主體詞分詞交集 >=2，直接顯示 Wikipedia 資料: \(data.title)")
             }
-            
-            // 緩存結果
             wikipediaCache.cacheItem(
                 name: attractionName,
                 title: data.title,
@@ -222,26 +233,14 @@ class AttractionDetailViewModel: ObservableObject {
                 language: language
             )
             return
-        }
-        
-        // 中等匹配度需要地址驗證
-        let isValid = await validateWikipediaMatch(
-            wikipediaTitle: data.title,
-            wikipediaSummary: data.summary,
-            attractionAddress: attractionAddress ?? "",
-            attractionCoordinate: attractionCoordinate
-        )
-        
-        if isValid {
+        } else if !mainQuery.isEmpty && !mainWiki.isEmpty && (mainQuery == mainWiki || mainWiki.contains(mainQuery) || mainQuery.contains(mainWiki)) {
             await MainActor.run {
                 self.wikipediaTitle = data.title
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] ✅ 地址驗證通過，載入 Wikipedia 資料: \(data.title)")
+                print("[Wiki] ✅ 主體詞完全包含，直接顯示 Wikipedia 資料: \(data.title)")
             }
-            
-            // 緩存結果
             wikipediaCache.cacheItem(
                 name: attractionName,
                 title: data.title,
@@ -249,32 +248,71 @@ class AttractionDetailViewModel: ObservableObject {
                 thumbnailURL: data.thumbnailURL,
                 language: language
             )
-        } else {
-            // 地址驗證失敗，使用備用結果
+            return
+        } else if nameScore > 0.7 && hasOverlap {
             await MainActor.run {
                 self.wikipediaTitle = data.title
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] 🔄 地址驗證失敗，使用備用結果: \(data.title)")
+                print("[Wiki] ✅ 名稱分數高且有重疊，直接顯示 Wikipedia 資料: \(data.title)")
+            }
+            wikipediaCache.cacheItem(
+                name: attractionName,
+                title: data.title,
+                summary: data.summary,
+                thumbnailURL: data.thumbnailURL,
+                language: language
+            )
+            return
+        } else if nameScore > 0.5 && hasOverlap {
+            let isValid = await validateWikipediaMatch(
+                wikipediaTitle: data.title,
+                wikipediaSummary: data.summary,
+                attractionAddress: attractionAddress ?? "",
+                attractionCoordinate: attractionCoordinate
+            )
+            if isValid {
+                await MainActor.run {
+                    self.wikipediaTitle = data.title
+                    self.wikipediaSummary = data.summary
+                    self.wikipediaThumbnailURL = data.thumbnailURL
+                    self.isLoading = false
+                    print("[Wiki] ✅ 中等分數且地址驗證通過，顯示 Wikipedia 資料: \(data.title)")
+                }
+                wikipediaCache.cacheItem(
+                    name: attractionName,
+                    title: data.title,
+                    summary: data.summary,
+                    thumbnailURL: data.thumbnailURL,
+                    language: language
+                )
+                return
             }
         }
+        // 其餘一律失敗
+        await MainActor.run {
+            self.wikipediaTitle = ""
+            self.wikipediaSummary = ""
+            self.wikipediaThumbnailURL = nil
+            self.isLoading = false
+            self.errorMessage = "無法找到匹配的 Wikipedia 資料"
+            print("[Wiki] ❌ 嚴格比對失敗，顯示錯誤訊息")
+        }
     }
-    
-    /// 處理備用搜索結果
     private func processFallbackResult(
         attractionName: String,
         language: String,
         data: (title: String, summary: String, thumbnailURL: String?)
     ) async {
-        print("[Wiki] 🔄 使用備用結果: \(data.title) (語言: \(language))")
-        
+        // 嚴格：備用結果一律不顯示
         await MainActor.run {
-            self.wikipediaTitle = data.title
-            self.wikipediaSummary = data.summary
-            self.wikipediaThumbnailURL = data.thumbnailURL
+            self.wikipediaTitle = ""
+            self.wikipediaSummary = ""
+            self.wikipediaThumbnailURL = nil
             self.isLoading = false
-            print("[Wiki] 🔄 載入備用 Wikipedia 資料: \(data.title)")
+            self.errorMessage = "無法找到匹配的 Wikipedia 資料"
+            print("[Wiki] ❌ 嚴格禁止備用結果顯示")
         }
     }
     
@@ -746,7 +784,7 @@ class AttractionDetailViewModel: ObservableObject {
         }
     }
     
-    /// 搜索Wikipedia頁面（新增功能）
+    /// 搜索Wikipedia頁面（整合Google三維搜尋系統）
     private func searchWikipediaPages(query: String, language: String) async -> (title: String, summary: String, thumbnailURL: String?)? {
         // 對於某些語言代碼，需要特殊處理
         let apiLanguage: String
@@ -764,6 +802,9 @@ class AttractionDetailViewModel: ObservableObject {
         default:
             apiLanguage = language
         }
+        
+        // 收集所有候選結果用於三維搜尋
+        var allCandidates: [AttractionCache] = []
         
         // 生成多個搜索查詢變體
         let searchQueries = generateSearchQueries(for: query)
@@ -801,22 +842,26 @@ class AttractionDetailViewModel: ObservableObject {
                     continue
                 }
                 
-                // 嘗試每個搜索結果
+                // 收集所有搜索結果作為候選
                 for result in searchResults {
                     guard let pageTitle = result["title"] as? String else { continue }
                     
-                    print("[Wiki] 🔍 嘗試搜索結果: \(pageTitle)")
+                    print("[Wiki] 🔍 收集候選結果: \(pageTitle)")
                     
-                    // 計算搜索結果與原查詢的匹配度
-                    let matchScore = calculateNameMatchScore(attractionName: query, wikipediaTitle: pageTitle)
-                    print("[Wiki] 🔍 搜索結果匹配分數: \(matchScore) - 查詢: \(query) vs 結果: \(pageTitle)")
-                    
-                    // 如果匹配度足夠高，獲取詳細資料
-                    if matchScore >= 0.3 {  // 對搜索結果使用較低的閾值
-                        if let pageResult = await fetchWikipediaPageDirect(query: pageTitle, language: language) {
-                            print("[Wiki] ✅ 通過搜索找到匹配頁面: \(pageTitle) (匹配度: \(matchScore))")
-                            return pageResult
-                        }
+                    // 獲取頁面詳細資料
+                    if let pageResult = await fetchWikipediaPageDirect(query: pageTitle, language: language) {
+                        // 創建AttractionCache候選
+                        let candidate = AttractionCache(
+                            names: [language: pageResult.title],
+                            addresses: [language: ""], // Wikipedia沒有地址信息
+                            latitude: attractionCoordinate?.latitude ?? 0.0,
+                            longitude: attractionCoordinate?.longitude ?? 0.0,
+                            descriptions: [language: pageResult.summary],
+                            source: "wikipedia_\(language)"
+                        )
+                        
+                        allCandidates.append(candidate)
+                        print("[Wiki] ✅ 添加候選結果: \(pageResult.title)")
                     }
                 }
                 
@@ -826,8 +871,47 @@ class AttractionDetailViewModel: ObservableObject {
             }
         }
         
-        print("[Wiki] ❌ 所有搜索變體都無結果: \(query)")
-        return nil
+        // 如果沒有候選結果，返回nil
+        guard !allCandidates.isEmpty else {
+            print("[Wiki] ❌ 沒有候選結果進行三維搜尋: \(query)")
+            return nil
+        }
+        
+        // 使用Google三維搜尋系統選擇最佳匹配
+        print("[Wiki] 🚀 啟動Google三維搜尋系統，候選數量: \(allCandidates.count)")
+        
+        // 設置比對模型
+        let compareModel = CompareModel(
+            names: [language: query],
+            address: attractionAddress ?? "",
+            latitude: attractionCoordinate?.latitude ?? 0.0,
+            longitude: attractionCoordinate?.longitude ?? 0.0
+        )
+        
+        // 執行三維搜尋
+        await MainActor.run {
+            attractionsManagementVM.setCompareModel(compareModel)
+            attractionsManagementVM.setAttractionCandidates(allCandidates)
+        }
+        
+        // 獲取最佳匹配結果
+        let bestMatch = await MainActor.run {
+            return attractionsManagementVM.bestMatch
+        }
+        
+        if let bestMatch = bestMatch {
+            print("[Wiki] 🎯 三維搜尋找到最佳匹配: \(bestMatch.names[language] ?? "Unknown")")
+            
+            // 轉換為返回格式
+            let title = bestMatch.names[language] ?? bestMatch.names.values.first ?? ""
+            let summary = bestMatch.descriptions?[language] ?? bestMatch.descriptions?.values.first ?? ""
+            let thumbnailURL: String? = nil // Wikipedia搜索結果沒有縮圖URL
+            
+            return (title: title, summary: summary, thumbnailURL: thumbnailURL)
+        } else {
+            print("[Wiki] ❌ 三維搜尋未找到合適匹配: \(query)")
+            return nil
+        }
     }
     
     /// 生成搜索查詢的多個變體
@@ -920,5 +1004,30 @@ class AttractionDetailViewModel: ObservableObject {
         self.errorMessage = nil
         
         loadWikipediaData()
+    }
+    
+    // 主體詞提取（中英文常見地理詞尾）
+    private func extractMainPlaceName(_ name: String) -> String {
+        let suffixes = ["泳灘", "沙灘", "碼頭", "廣場", "車站", "公園", "中心", "海灘", "Beach", "Pier", "Square", "Station", "Park", "Center", "Centre"]
+        var main = name
+        for suffix in suffixes {
+            if main.hasSuffix(suffix) {
+                main = String(main.dropLast(suffix.count))
+            }
+        }
+        return main.trimmingCharacters(in: .whitespaces)
+    }
+    
+    // 主體詞分詞交集（忽略常見前綴/類型/連接詞）
+    private func mainWords(_ name: String) -> Set<String> {
+        let ignoreWords = [
+            "congregation", "temple", "church", "mosque", "cathedral", "synagogue", "school", "museum", "gallery", "park", "beach", "pier", "square", "station", "center", "centre", "hall", "library", "mosque", "shrine", "hotel", "restaurant", "palace", "tower", "bridge", "garden", "market", "plaza", "avenue", "road", "street", "of", "the", "at", "in", "on", "and", "de", "la", "le", "el", "saint", "st", "san", "santa"
+        ]
+        return Set(
+            name
+                .lowercased()
+                .components(separatedBy: CharacterSet(charactersIn: " -_,.()[]{}'\"/\\"))
+                .filter { !$0.isEmpty && !ignoreWords.contains($0) }
+        )
     }
 } 

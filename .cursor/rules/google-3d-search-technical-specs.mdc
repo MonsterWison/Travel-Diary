@@ -1,0 +1,399 @@
+# Google Search 三維搜尋技術規格書
+
+## 技術架構概覽
+
+### 核心類別結構
+```swift
+class AttractionsManagementViewModel: ObservableObject {
+    // 三維搜尋的核心實現
+    func findBestMatchWithAdvanced3DSearch() -> AttractionCache?
+    
+    // 語意維度處理
+    func calculateSemanticSimilarity(_ query: String, _ candidate: String) -> Double
+    func expandQueryWithSynonyms(_ query: String) -> Set<String>
+    func extractMainWords(_ name: String) -> Set<String>
+    
+    // 地理維度處理
+    func calculateGeographicSimilarity(_ compareModel: CompareModel, _ candidate: AttractionCache) -> Double
+    func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double
+    
+    // 類型維度處理
+    func calculateTypeSimilarity(_ compareModel: CompareModel, _ candidate: AttractionCache) -> Double
+    
+    // 動態調整系統
+    func calculateDynamicWeights(_ query: String, _ candidate: String) -> (semantic: Double, geographic: Double, type: Double)
+    func calculateConfidenceThreshold(_ query: String) -> Double
+}
+```
+
+## 語意維度實施細節
+
+### 同義詞擴展系統
+```swift
+private func expandQueryWithSynonyms(_ query: String) -> Set<String> {
+    let synonyms: [String: [String]] = [
+        "temple": ["shrine", "monastery", "pagoda", "sanctuary", "cathedral", "church"],
+        "museum": ["gallery", "exhibition", "collection", "center", "centre"],
+        "beach": ["shore", "coast", "bay", "waterfront", "seaside"],
+        "square": ["plaza", "piazza", "place", "courtyard", "park"],
+        "station": ["terminal", "depot", "stop", "hub"],
+        "market": ["bazaar", "marketplace", "mart", "fair"],
+        // ... 更多同義詞
+    ]
+    
+    var expanded = Set([query.lowercased()])
+    let words = query.lowercased().components(separatedBy: CharacterSet(charactersIn: " -_,.()[]{}'\"/\\"))
+    
+    for word in words {
+        if let syns = synonyms[word] {
+            expanded.formUnion(syns)
+        }
+    }
+    
+    return expanded
+}
+```
+
+### 主體詞提取算法
+```swift
+private func extractMainWords(_ name: String) -> Set<String> {
+    let ignoreWords = [
+        // 英文停用詞
+        "congregation", "temple", "church", "mosque", "cathedral", "synagogue",
+        "school", "museum", "gallery", "park", "beach", "pier", "square", "station",
+        "center", "centre", "hall", "library", "shrine", "hotel", "restaurant",
+        "of", "the", "at", "in", "on", "and", "de", "la", "le", "el",
+        "saint", "st", "san", "santa", "new", "old", "big", "small",
+        
+        // 中文停用詞
+        "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都",
+        "寺廟", "博物館", "公園", "海灘", "廣場", "車站", "中心", "圖書館",
+        "酒店", "餐廳", "宮殿", "塔", "橋", "花園", "市場", "大街"
+    ]
+    
+    return Set(
+        name.lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: " -_,.()[]{}'\"/\\"))
+            .filter { !$0.isEmpty && $0.count > 2 && !ignoreWords.contains($0) }
+    )
+}
+```
+
+### 語意相似度計算
+```swift
+private func calculateSemanticSimilarity(_ query: String, _ candidate: String) -> Double {
+    let queryExpanded = expandQueryWithSynonyms(query)
+    let candidateExpanded = expandQueryWithSynonyms(candidate)
+    
+    let queryWords = extractMainWords(query)
+    let candidateWords = extractMainWords(candidate)
+    
+    // 1. 主詞交集匹配（≥2 個交集直接通過）
+    let intersection = queryWords.intersection(candidateWords)
+    if intersection.count >= 2 {
+        return 0.95 // 高度相似
+    }
+    
+    // 2. 同義詞擴展匹配
+    let synonymIntersection = queryExpanded.intersection(candidateExpanded)
+    let synonymScore = Double(synonymIntersection.count) / Double(queryExpanded.union(candidateExpanded).count)
+    
+    // 3. Jaccard 相似度
+    let jaccard = Double(intersection.count) / Double(queryWords.union(candidateWords).count)
+    
+    // 4. 改進的 Levenshtein 距離
+    let levDistance = levenshteinDistance(query.lowercased(), candidate.lowercased())
+    let maxLen = max(query.count, candidate.count)
+    let levScore = maxLen > 0 ? 1.0 - Double(levDistance) / Double(maxLen) : 0.0
+    
+    // 5. 字符 N-gram 相似度
+    let ngramScore = calculateNGramSimilarity(query, candidate)
+    
+    // 6. 多語言匹配
+    let multilingualScore = calculateMultilingualSimilarity(query, candidate)
+    
+    // 綜合語意分數
+    return max(
+        synonymScore * 0.3 + 
+        jaccard * 0.25 + 
+        levScore * 0.2 + 
+        ngramScore * 0.15 + 
+        multilingualScore * 0.1,
+        intersection.count > 0 ? 0.6 : 0.0
+    )
+}
+```
+
+## 地理維度實施細節
+
+### 非線性距離評分
+```swift
+private func calculateGeographicSimilarity(_ compareModel: CompareModel, _ candidate: AttractionCache) -> Double {
+    let distance = calculateDistance(
+        lat1: compareModel.latitude, lon1: compareModel.longitude,
+        lat2: candidate.latitude, lon2: candidate.longitude
+    )
+    
+    // 非線性距離評分
+    let baseScore: Double
+    if distance < 0.1 {
+        baseScore = 1.0 // 100m 內完美匹配
+    } else if distance < 0.5 {
+        baseScore = 0.95 // 500m 內高度匹配
+    } else if distance < 1.0 {
+        baseScore = 0.85 // 1km 內良好匹配
+    } else if distance < 2.0 {
+        baseScore = 0.7 // 2km 內可接受
+    } else if distance < 5.0 {
+        baseScore = 0.5 // 5km 內邊緣匹配
+    } else if distance < 10.0 {
+        baseScore = 0.3 // 10km 內低匹配
+    } else {
+        baseScore = max(0.0, 0.2 - distance / 100.0) // 遠距離衰減
+    }
+    
+    // 景點類型距離容忍度調整
+    let typeDistanceTolerance = getDistanceToleranceForType(candidate)
+    
+    return min(1.0, baseScore + typeDistanceTolerance)
+}
+```
+
+### Haversine 距離計算
+```swift
+private func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+    let R = 6371.0 // 地球半徑（公里）
+    let dLat = (lat2 - lat1) * .pi / 180
+    let dLon = (lon2 - lon1) * .pi / 180
+    let a = sin(dLat/2) * sin(dLat/2) + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180) * sin(dLon/2) * sin(dLon/2)
+    let c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+}
+```
+
+## 類型維度實施細節
+
+### 景點分類系統
+```swift
+private func calculateTypeSimilarity(_ compareModel: CompareModel, _ candidate: AttractionCache) -> Double {
+    let categories: [String: [String]] = [
+        "religious": ["temple", "church", "mosque", "synagogue", "cathedral", "shrine", "monastery"],
+        "cultural": ["museum", "gallery", "theater", "opera", "concert", "cultural", "art"],
+        "recreational": ["park", "garden", "zoo", "aquarium", "amusement", "playground"],
+        "natural": ["beach", "lake", "mountain", "forest", "river", "waterfall", "cave"],
+        "transportation": ["station", "airport", "port", "terminal", "depot", "hub"],
+        "commercial": ["market", "mall", "shopping", "store", "restaurant", "hotel"],
+        "historical": ["castle", "palace", "fort", "monument", "memorial", "historic"],
+        "educational": ["university", "college", "school", "library", "institute"],
+        "medical": ["hospital", "clinic", "medical", "health", "pharmacy"],
+        "government": ["city hall", "courthouse", "embassy", "consulate", "government"],
+        "sports": ["stadium", "arena", "gym", "sports", "field", "court"],
+        "entertainment": ["cinema", "theater", "club", "bar", "entertainment"]
+    ]
+    
+    // 分類匹配邏輯
+    let queryName = compareModel.names["en"]?.lowercased() ?? ""
+    let candidateName = candidate.names["en"]?.lowercased() ?? ""
+    
+    var queryCategory = "unknown"
+    var candidateCategory = "unknown"
+    
+    // 找出查詢和候選的類型
+    for (category, keywords) in categories {
+        if keywords.contains(where: { queryName.contains($0) }) {
+            queryCategory = category
+        }
+        if keywords.contains(where: { candidateName.contains($0) }) {
+            candidateCategory = category
+        }
+    }
+    
+    // 計算類型相似度
+    if queryCategory == candidateCategory && queryCategory != "unknown" {
+        return 1.0 // 完全匹配
+    }
+    
+    // 相關類型的部分匹配
+    let relatedCategories: [String: [String]] = [
+        "religious": ["historical", "cultural"],
+        "cultural": ["historical", "educational"],
+        "recreational": ["natural", "entertainment"],
+        "natural": ["recreational"],
+        "historical": ["cultural", "religious"],
+        "educational": ["cultural"]
+    ]
+    
+    if let related = relatedCategories[queryCategory], related.contains(candidateCategory) {
+        return 0.6 // 相關類型
+    }
+    
+    return 0.0 // 無匹配
+}
+```
+
+## 動態調整系統
+
+### 權重動態計算
+```swift
+private func calculateDynamicWeights(_ query: String, _ candidate: String) -> (semantic: Double, geographic: Double, type: Double) {
+    let queryLower = query.lowercased()
+    
+    // 根據查詢特徵調整權重
+    if queryLower.contains("near") || queryLower.contains("nearby") {
+        return (0.3, 0.6, 0.1) // 地理權重增加
+    } else if queryLower.contains("type") || queryLower.contains("kind") {
+        return (0.4, 0.3, 0.3) // 類型權重增加
+    } else if queryLower.count > 30 {
+        return (0.6, 0.3, 0.1) // 長查詢增加語意權重
+    }
+    
+    return (0.5, 0.4, 0.1) // 預設權重
+}
+```
+
+### 置信度門檻計算
+```swift
+private func calculateConfidenceThreshold(_ query: String) -> Double {
+    let queryLower = query.lowercased()
+    
+    // 根據查詢特徵調整門檻
+    if queryLower.contains("exact") || queryLower.contains("specific") {
+        return 0.85 // 精確查詢需要更高置信度
+    } else if queryLower.count < 10 {
+        return 0.6 // 短查詢降低門檻
+    }
+    
+    return 0.7 // 預設門檻
+}
+```
+
+## 性能優化指南
+
+### 緩存策略
+```swift
+// 同義詞擴展結果緩存
+private var synonymCache: [String: Set<String>] = [:]
+
+// 距離計算結果緩存
+private var distanceCache: [String: Double] = [:]
+
+// 主詞提取結果緩存
+private var mainWordsCache: [String: Set<String>] = [:]
+```
+
+### 批次處理
+```swift
+// 批次處理候選景點，提高效率
+func processCandidatesInBatches(_ candidates: [AttractionCache], batchSize: Int = 100) -> AttractionCache? {
+    var bestMatch: AttractionCache?
+    var bestScore: Double = 0.0
+    
+    for batch in candidates.chunked(into: batchSize) {
+        let batchResult = processBatch(batch)
+        if let result = batchResult, result.score > bestScore {
+            bestMatch = result.candidate
+            bestScore = result.score
+        }
+    }
+    
+    return bestMatch
+}
+```
+
+## 調試和監控
+
+### 詳細日誌輸出
+```swift
+private func printScoringResults(_ results: [(AttractionCache, Double, String)], bestScore: Double) {
+    print("=== 三維搜尋評分結果 ===")
+    let sortedResults = results.sorted { $0.1 > $1.1 }
+    for (index, (candidate, score, breakdown)) in sortedResults.prefix(5).enumerated() {
+        let marker = score == bestScore ? "🏆" : "📍"
+        print("\(marker) \(index + 1). \(candidate.names["en"] ?? "Unknown") - \(breakdown)")
+    }
+    print("========================")
+}
+```
+
+### 性能監控
+```swift
+// 匹配時間監控
+let startTime = CFAbsoluteTimeGetCurrent()
+let result = findBestMatchWithAdvanced3DSearch()
+let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
+print("匹配耗時: \(timeElapsed * 1000)ms")
+
+// 記憶體使用監控
+let memoryUsage = getMemoryUsage()
+print("記憶體使用: \(memoryUsage)MB")
+```
+
+## 測試框架
+
+### 單元測試
+```swift
+func testSemanticSimilarity() {
+    let viewModel = AttractionsManagementViewModel()
+    
+    // 測試同義詞匹配
+    let score1 = viewModel.calculateSemanticSimilarity("Buddhist Temple", "Man Mo Temple")
+    XCTAssertGreaterThan(score1, 0.7)
+    
+    // 測試縮寫匹配
+    let score2 = viewModel.calculateSemanticSimilarity("Congregation Sherith Israel", "Shearith Israel")
+    XCTAssertGreaterThan(score2, 0.8)
+    
+    // 測試中文匹配
+    let score3 = viewModel.calculateSemanticSimilarity("銀線灣泳灘", "銀線灣")
+    XCTAssertGreaterThan(score3, 0.8)
+}
+```
+
+### 集成測試
+```swift
+func testComplete3DSearch() {
+    let viewModel = AttractionsManagementViewModel()
+    
+    // 設定測試數據
+    let compareModel = CompareModel(
+        names: ["en": "Congregation Sherith Israel"],
+        address: "San Francisco, CA",
+        latitude: 37.7749,
+        longitude: -122.4194
+    )
+    
+    let candidates = [
+        AttractionCache(
+            names: ["en": "Shearith Israel"],
+            addresses: ["en": "San Francisco, CA"],
+            latitude: 37.7750,
+            longitude: -122.4195,
+            descriptions: ["en": "Historic synagogue"],
+            source: "test"
+        )
+    ]
+    
+    viewModel.setCompareModel(compareModel)
+    viewModel.setAttractionCandidates(candidates)
+    
+    XCTAssertNotNil(viewModel.bestMatch)
+    XCTAssertEqual(viewModel.bestMatch?.names["en"], "Shearith Israel")
+}
+```
+
+---
+
+**技術要求**：
+- Swift 5.0+
+- iOS 18.0+
+- Xcode 16.0+
+- 支援 SwiftUI 和 Combine
+
+**性能基準**：
+- 匹配時間 < 100ms（1000 個候選景點）
+- 記憶體使用 < 50MB
+- 準確度 > 88%
+description:
+globs:
+alwaysApply: false
+---
