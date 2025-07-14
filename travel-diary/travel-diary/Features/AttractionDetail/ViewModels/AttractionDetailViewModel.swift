@@ -882,7 +882,7 @@ class AttractionDetailViewModel: ObservableObject {
         
         // 設置比對模型
         let compareModel = CompareModel(
-            names: [language: query],
+            name: query,
             address: attractionAddress ?? "",
             latitude: attractionCoordinate?.latitude ?? 0.0,
             longitude: attractionCoordinate?.longitude ?? 0.0
@@ -1029,5 +1029,283 @@ class AttractionDetailViewModel: ObservableObject {
                 .components(separatedBy: CharacterSet(charactersIn: " -_,.()[]{}'\"/\\"))
                 .filter { !$0.isEmpty && !ignoreWords.contains($0) }
         )
+    }
+    
+    // MARK: - 分階段景點搜尋功能
+    
+    /// 分階段搜尋景點 - 從0-2km開始，逐步擴展到20km
+    /// - Parameters:
+    ///   - userLocation: 用戶當前位置
+    ///   - attractionsListVM: 景點列表視圖模型
+    ///   - attractionsManagementVM: 景點管理視圖模型
+    /// - Returns: 搜尋到的景點列表
+    func performStagedAttractionSearch(
+        userLocation: CLLocationCoordinate2D,
+        attractionsListVM: AttractionsListViewModel,
+        attractionsManagementVM: AttractionsManagementViewModel
+    ) async -> [TemplateMemoryModel] {
+        print("[StagedSearch] 開始分階段景點搜尋")
+        
+        var allAttractions: [TemplateMemoryModel] = []
+        let searchStages = [
+            (start: 0, end: 2000, label: "0-2km"),
+            (start: 2000, end: 4000, label: "2-4km"),
+            (start: 4000, end: 6000, label: "4-6km"),
+            (start: 6000, end: 8000, label: "6-8km"),
+            (start: 8000, end: 10000, label: "8-10km"),
+            (start: 10000, end: 12000, label: "10-12km"),
+            (start: 12000, end: 14000, label: "12-14km"),
+            (start: 14000, end: 16000, label: "14-16km"),
+            (start: 16000, end: 18000, label: "16-18km"),
+            (start: 18000, end: 20000, label: "18-20km")
+        ]
+        
+        for stage in searchStages {
+            // 檢查是否已達到50個景點限制
+            if attractionsListVM.hasReachedMaxLimit {
+                print("[StagedSearch] 已達到50個景點限制，停止搜尋")
+                break
+            }
+            
+            print("[StagedSearch] 搜尋階段: \(stage.label)")
+            
+            // 1. 搜尋該階段的景點
+            let stageAttractions = await searchAttractionsInRange(
+                userLocation: userLocation,
+                minDistance: stage.start,
+                maxDistance: stage.end,
+                stageLabel: stage.label
+            )
+            
+            // 2. 過濾出需要的數量
+            let remainingCapacity = attractionsListVM.remainingCapacity
+            let limitedStageAttractions = Array(stageAttractions.prefix(remainingCapacity))
+            
+            // 3. 處理Wikipedia匹配
+            let processedAttractions = await processWikipediaMatching(
+                attractions: limitedStageAttractions,
+                attractionsManagementVM: attractionsManagementVM
+            )
+            
+            // 4. 累計到總列表
+            allAttractions = attractionsListVM.cumulativeProcess(
+                processedAttractions,
+                with: allAttractions
+            )
+            
+            print("[StagedSearch] 階段 \(stage.label) 完成，目前總計: \(allAttractions.count) 個景點")
+            
+            // 如果達到限制，停止搜尋
+            if attractionsListVM.hasReachedMaxLimit {
+                print("[StagedSearch] 達到50個景點限制，停止後續搜尋")
+                break
+            }
+        }
+        
+        print("[StagedSearch] 分階段搜尋完成，總計: \(allAttractions.count) 個景點")
+        return allAttractions
+    }
+    
+    /// 在指定距離範圍內搜尋景點
+    private func searchAttractionsInRange(
+        userLocation: CLLocationCoordinate2D,
+        minDistance: Int,
+        maxDistance: Int,
+        stageLabel: String
+    ) async -> [TemplateMemoryModel] {
+        print("[RangeSearch] 搜尋範圍: \(stageLabel) (\(minDistance)m - \(maxDistance)m)")
+        
+        // 使用現有的NearbyAttractionsService搜尋邏輯
+        let searchRadius = Double(maxDistance)
+        let region = MKCoordinateRegion(
+            center: userLocation,
+            latitudinalMeters: searchRadius * 2,
+            longitudinalMeters: searchRadius * 2
+        )
+        
+        var attractions: [TemplateMemoryModel] = []
+        
+        // 搜尋關鍵詞 - 使用高效率的旅遊景點關鍵詞
+        let keywords = [
+            "tourist attraction", "landmark", "museum", "park", "temple",
+            "historic site", "cultural center", "famous restaurant", "shopping mall",
+            "viewpoint", "beach", "botanical garden", "art gallery", "monument"
+        ]
+        
+        // 限制每個關鍵詞的結果數量，避免過多資料
+        let maxResultsPerKeyword = 10
+        
+        for keyword in keywords {
+            let keywordResults = await searchSingleKeyword(
+                keyword: keyword,
+                region: region,
+                userLocation: userLocation,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
+                stageLabel: stageLabel
+            )
+            
+            // 限制結果數量
+            let limitedResults = Array(keywordResults.prefix(maxResultsPerKeyword))
+            attractions.append(contentsOf: limitedResults)
+        }
+        
+        // 去重和按距離排序
+        let uniqueAttractions = removeDuplicatesByLocation(attractions)
+        let sortedAttractions = uniqueAttractions.sorted { $0.distanceFromUser < $1.distanceFromUser }
+        
+        print("[RangeSearch] 範圍 \(stageLabel) 找到 \(sortedAttractions.count) 個景點")
+        return sortedAttractions
+    }
+    
+    /// 搜尋單一關鍵詞
+    private func searchSingleKeyword(
+        keyword: String,
+        region: MKCoordinateRegion,
+        userLocation: CLLocationCoordinate2D,
+        minDistance: Int,
+        maxDistance: Int,
+        stageLabel: String
+    ) async -> [TemplateMemoryModel] {
+        return await withCheckedContinuation { continuation in
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = keyword
+            request.region = region
+            request.resultTypes = [.pointOfInterest, .address]
+            
+            let search = MKLocalSearch(request: request)
+            search.start { response, error in
+                if let error = error {
+                    print("[KeywordSearch] 搜尋錯誤 (\(keyword)): \(error.localizedDescription)")
+                    continuation.resume(returning: [])
+                    return
+                }
+                
+                guard let response = response else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                
+                let userLocationCL = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                var results: [TemplateMemoryModel] = []
+                
+                for item in response.mapItems {
+                    let itemLocation = CLLocation(
+                        latitude: item.placemark.coordinate.latitude,
+                        longitude: item.placemark.coordinate.longitude
+                    )
+                    let distance = userLocationCL.distance(from: itemLocation)
+                    
+                    // 過濾距離範圍
+                    if distance >= Double(minDistance) && distance <= Double(maxDistance) {
+                        let templateModel = TemplateMemoryModel(
+                            names: ["en": item.name ?? "Unknown"],
+                            addresses: ["en": self.formatAddress(item.placemark)],
+                            latitude: item.placemark.coordinate.latitude,
+                            longitude: item.placemark.coordinate.longitude,
+                            descriptions: nil,
+                            source: nil,
+                            distanceFromUser: distance,
+                            searchRadius: stageLabel,
+                            processingStage: .extracted,
+                            hasWikipediaData: false
+                        )
+                        results.append(templateModel)
+                    }
+                }
+                
+                print("[KeywordSearch] 關鍵詞 '\(keyword)' 在 \(stageLabel) 找到 \(results.count) 個景點")
+                continuation.resume(returning: results)
+            }
+        }
+    }
+    
+    /// 處理Wikipedia匹配
+    private func processWikipediaMatching(
+        attractions: [TemplateMemoryModel],
+        attractionsManagementVM: AttractionsManagementViewModel
+    ) async -> [TemplateMemoryModel] {
+        print("[WikiMatching] 開始處理 \(attractions.count) 個景點的Wikipedia匹配")
+        
+        var processedAttractions: [TemplateMemoryModel] = []
+        
+        for attraction in attractions {
+            // 取得景點名稱
+            guard let attractionName = attraction.names["en"] else {
+                continue
+            }
+            
+            // 使用三維搜尋方式匹配Wikipedia
+            let matchResult = await attractionsManagementVM.searchWikipediaWithThreeDimensionalMatching(
+                attractionName: attractionName,
+                attractionAddress: attraction.addresses?["en"],
+                attractionCoordinate: CLLocationCoordinate2D(
+                    latitude: attraction.latitude,
+                    longitude: attraction.longitude
+                )
+            )
+            
+            // 更新景點資料
+            if let result = matchResult {
+                let updatedAttraction = TemplateMemoryModel(
+                    names: ["en": result.title],
+                    addresses: attraction.addresses,
+                    latitude: attraction.latitude,
+                    longitude: attraction.longitude,
+                    descriptions: ["en": result.summary],
+                    source: result.title,
+                    distanceFromUser: attraction.distanceFromUser,
+                    searchRadius: attraction.searchRadius,
+                    processingStage: .wikipediaMatched,
+                    hasWikipediaData: true
+                )
+                processedAttractions.append(updatedAttraction)
+            }
+        }
+        
+        print("[WikiMatching] 完成匹配，\(processedAttractions.count) 個景點有Wikipedia資料")
+        return processedAttractions
+    }
+    
+    /// 格式化地址
+    private func formatAddress(_ placemark: MKPlacemark) -> String {
+        var addressComponents: [String] = []
+        
+        if let name = placemark.name {
+            addressComponents.append(name)
+        }
+        if let thoroughfare = placemark.thoroughfare {
+            addressComponents.append(thoroughfare)
+        }
+        if let locality = placemark.locality {
+            addressComponents.append(locality)
+        }
+        if let administrativeArea = placemark.administrativeArea {
+            addressComponents.append(administrativeArea)
+        }
+        if let country = placemark.country {
+            addressComponents.append(country)
+        }
+        
+        return addressComponents.joined(separator: ", ")
+    }
+    
+    /// 基於位置去重
+    private func removeDuplicatesByLocation(_ attractions: [TemplateMemoryModel]) -> [TemplateMemoryModel] {
+        var uniqueAttractions: [TemplateMemoryModel] = []
+        
+        for attraction in attractions {
+            let isDuplicate = uniqueAttractions.contains { existing in
+                let distance = CLLocation(latitude: existing.latitude, longitude: existing.longitude)
+                    .distance(from: CLLocation(latitude: attraction.latitude, longitude: attraction.longitude))
+                return distance < 100 // 100米內視為重複
+            }
+            
+            if !isDuplicate {
+                uniqueAttractions.append(attraction)
+            }
+        }
+        
+        return uniqueAttractions
     }
 } 

@@ -30,6 +30,11 @@ struct TravelMapView: View {
         return offset
     }
     
+    // MARK: - 有效景點數量計算
+    private var validAttractionsCount: Int {
+        return viewModel.nearbyAttractions.filter { hasWikipediaData($0) }.count
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -68,10 +73,17 @@ struct TravelMapView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     
+                    // 分階段搜尋進度指示器
+                    if viewModel.isProgressVisible {
+                        stagedSearchProgressIndicator
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
                     Spacer()
                 }
                 .animation(.easeInOut(duration: 0.3), value: viewModel.authorizationStatus)
                 .animation(.easeInOut(duration: 0.3), value: viewModel.gpsSignalStrength)
+                .animation(.easeInOut(duration: 0.3), value: viewModel.isProgressVisible)
                 
                 // HIG: 精簡浮動信息卡片（僅在需要時顯示）
                 if !isSearchFocused && !viewModel.showingSearchResults {
@@ -250,6 +262,33 @@ struct TravelMapView: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
+                }
+                
+                // 分階段搜尋設置按鈕
+                Menu {
+                    Button(action: {
+                        viewModel.enableStagedSearchMode()
+                    }) {
+                        Label("啟用智能搜尋", systemImage: "brain.head.profile")
+                    }
+                    
+                    Button(action: {
+                        viewModel.disableStagedSearchMode()
+                    }) {
+                        Label("使用傳統搜尋", systemImage: "magnifyingglass")
+                    }
+                    
+                    Button(action: {
+                        viewModel.searchNearbyAttractions()
+                    }) {
+                        Label("重新搜尋景點", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Image(systemName: "gear")
+                        .foregroundColor(.blue)
+                        .font(.body)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal, 12)
@@ -650,8 +689,8 @@ struct TravelMapView: View {
                     SearchResultAnnotation(result: selectedResult)
                 }
             }
-            // 新增：選中景點標註
-            ForEach(viewModel.nearbyAttractions, id: \.id) { attraction in
+            // 新增：選中景點標註 - 只顯示有Wikipedia資料的景點
+            ForEach(viewModel.nearbyAttractions.filter { hasWikipediaData($0) }, id: \.id) { attraction in
                 Marker(attraction.name, systemImage: attraction.category.iconName, coordinate: CLLocationCoordinate2D(latitude: attraction.coordinate.latitude, longitude: attraction.coordinate.longitude))
                     .tint(.orange)
                     .tag(attraction.id)
@@ -842,12 +881,12 @@ struct TravelMapView: View {
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
-                            Text("\(viewModel.nearbyAttractions.count) 個地點（緩存數據）")
+                            Text("\(validAttractionsCount) 個地點（緩存數據）")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     } else {
-                        Text("\(viewModel.nearbyAttractions.count) 個地點（20km內）")
+                        Text("\(validAttractionsCount) 個地點（20km內）")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -961,7 +1000,7 @@ struct TravelMapView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 60)
                     }
-                    ForEach(viewModel.nearbyAttractions) { attraction in
+                    ForEach(viewModel.nearbyAttractions.filter { hasWikipediaData($0) }) { attraction in
                         ExpandedAttractionCard(attraction: attraction)
                             .environmentObject(viewModel)
                             .onTapGesture {
@@ -1619,5 +1658,69 @@ class DetailViewModelManager: ObservableObject {
         print("[DetailVM] 清除 ViewModel")
         viewModel = nil
         lastAttractionName = nil
+    }
+}
+
+// MARK: - 景點資料檢查輔助方法
+extension TravelMapView {
+    /// 檢查景點是否有Wikipedia資料
+    /// - Parameter attraction: 要檢查的景點
+    /// - Returns: 是否有Wikipedia資料
+    private func hasWikipediaData(_ attraction: NearbyAttraction) -> Bool {
+        // 檢查是否有詳細描述或其他Wikipedia相關資料
+        // 這裡可以根據實際需求調整檢查邏輯
+        
+        // 暫時的檢查邏輯：
+        // 1. 檢查是否有詳細描述
+        // 2. 檢查名稱是否不是預設值
+        // 3. 檢查是否有地址資訊
+        
+        let hasDescription = attraction.description != "未知景點" && 
+                           !attraction.description.isEmpty &&
+                           attraction.description != attraction.name
+        
+        let hasValidName = attraction.name != "未知景點" && 
+                          !attraction.name.isEmpty
+        
+        let hasAddress = attraction.address != nil && 
+                        !attraction.address!.isEmpty
+        
+        // 如果有描述且名稱有效，則認為有Wikipedia資料
+        return hasDescription && hasValidName && hasAddress
+    }
+    
+    /// 分階段搜尋進度指示器
+    private var stagedSearchProgressIndicator: some View {
+        VStack(spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("智能搜尋中...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    
+                    Text(viewModel.currentSearchStage)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Text("\(Int(viewModel.searchProgress * 100))%")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            
+            ProgressView(value: viewModel.searchProgress, total: 1.0)
+                .progressViewStyle(LinearProgressViewStyle())
+                .scaleEffect(y: 1.5)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        )
+        .padding(.horizontal, 16)
     }
 } 

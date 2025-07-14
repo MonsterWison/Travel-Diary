@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 class AttractionsManagementViewModel: ObservableObject {
     @Published var compareModel: CompareModel?
@@ -277,7 +278,7 @@ class AttractionsManagementViewModel: ObservableObject {
     
     // 景點類型相似度計算
     private func calculateTypeSimilarity(_ compareModel: CompareModel, _ candidate: AttractionCache) -> Double {
-        let queryName = compareModel.names["en"]?.lowercased() ?? compareModel.names.values.first?.lowercased() ?? ""
+        let queryName = compareModel.name.lowercased()
         let candidateName = candidate.names["en"]?.lowercased() ?? candidate.names.values.first?.lowercased() ?? ""
         
         // 景點類型分類
@@ -349,7 +350,7 @@ class AttractionsManagementViewModel: ObservableObject {
         
         for candidate in attractionCandidates {
             // 1. 語意維度分析 (50% 權重)
-            let queryText = compareModel.names["en"] ?? compareModel.names.values.first ?? ""
+            let queryText = compareModel.name
             let candidateText = candidate.names["en"] ?? candidate.names.values.first ?? ""
             let semanticScore = calculateSemanticSimilarity(queryText, candidateText)
             
@@ -493,5 +494,76 @@ class AttractionsManagementViewModel: ObservableObject {
             return score < maxDistanceThreshold
         }
         return false
+    }
+    
+    // MARK: - 三維搜尋Wikipedia匹配 (用於分階段搜尋)
+    
+    /// 使用三維搜尋方式匹配Wikipedia資料
+    /// - Parameters:
+    ///   - attractionName: 景點名稱
+    ///   - attractionAddress: 景點地址
+    ///   - attractionCoordinate: 景點坐標
+    /// - Returns: Wikipedia匹配結果
+    func searchWikipediaWithThreeDimensionalMatching(
+        attractionName: String,
+        attractionAddress: String?,
+        attractionCoordinate: CLLocationCoordinate2D
+    ) async -> (title: String, summary: String, thumbnailURL: String?)? {
+        
+        print("[3DSearch] 開始三維搜尋: \(attractionName)")
+        
+        // 建立CompareModel
+        let compareModel = CompareModel(
+            name: attractionName,
+            address: attractionAddress ?? "",
+            latitude: attractionCoordinate.latitude,
+            longitude: attractionCoordinate.longitude
+        )
+        
+        // 設定比對依據
+        setCompareModel(compareModel)
+        
+        // 模擬Wikipedia搜尋結果 (實際應該調用Wikipedia API)
+        let mockWikipediaResults = await fetchWikipediaResults(for: attractionName)
+        
+        // 設定候選景點
+        setAttractionCandidates(mockWikipediaResults)
+        
+        // 獲取最佳匹配
+        if let bestMatch = self.bestMatch {
+            let title = bestMatch.names["en"] ?? bestMatch.names.values.first ?? attractionName
+            let summary = bestMatch.descriptions?["en"] ?? bestMatch.descriptions?.values.first ?? ""
+            
+            print("[3DSearch] 找到最佳匹配: \(title)")
+            return (title: title, summary: summary, thumbnailURL: nil)
+        }
+        
+        print("[3DSearch] 未找到合適匹配: \(attractionName)")
+        return nil
+    }
+    
+    /// 獲取Wikipedia搜尋結果 (模擬)
+    private func fetchWikipediaResults(for query: String) async -> [AttractionCache] {
+        // 這裡應該調用實際的Wikipedia API
+        // 目前返回模擬結果
+        
+        return await withCheckedContinuation { continuation in
+            // 模擬網路延遲
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+                // 模擬Wikipedia搜尋結果
+                let mockResults: [AttractionCache] = [
+                    AttractionCache(
+                        names: ["en": query],
+                        addresses: ["en": "Mock Address"],
+                        latitude: 0.0,
+                        longitude: 0.0,
+                        descriptions: ["en": "Mock description for \(query)"],
+                        source: "Wikipedia"
+                    )
+                ]
+                
+                continuation.resume(returning: mockResults)
+            }
+        }
     }
 } 

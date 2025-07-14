@@ -18,6 +18,15 @@ class LocationViewModel: ObservableObject {
     private let locationService = LocationService()
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Configuration
+    /// 啟用分階段搜尋系統（預設為false以保持穩定性）
+    private var enableStagedSearch: Bool = false
+    
+    // MARK: - Progress Tracking
+    @Published var searchProgress: Double = 0.0
+    @Published var currentSearchStage: String = ""
+    @Published var isProgressVisible: Bool = false
+    
     // 常數定義
     private static let hongKongLatitude: Double = 22.307761
     private static let hongKongLongitude: Double = 114.257263
@@ -589,26 +598,40 @@ class LocationViewModel: ObservableObject {
             #endif
             return
         }
+        
         isLoadingAttractions = true
         currentNearbyAttractions.removeAll()
-        let attractionsModel = NearbyAttractionsModel()
-        #if DEBUG
-        print("[DEBUG] searchNearbyAttractions: start model search at \(location.coordinate)")
-        #endif
-        attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                #if DEBUG
-                print("[DEBUG] searchNearbyAttractions: model returned \(processedAttractions.count) attractions")
-                #endif
-                self.currentNearbyAttractions = processedAttractions
-                self.nearbyAttractions = processedAttractions
-                self.isLoadingAttractions = false
-                if !processedAttractions.isEmpty {
-                    self.isUsingCachedData = false
-                    self.autoSaveAttractionsToCache()
-                } else {
-                    self.isUsingCachedData = false
+        
+        // 根據配置選擇搜尋方式
+        if enableStagedSearch {
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractions: 使用分階段搜尋系統")
+            #endif
+            enableStagedAttractionSearch(userLocation: location.coordinate)
+            // 分階段搜尋會在完成後自動設置 isLoadingAttractions = false
+        } else {
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractions: 使用傳統搜尋系統")
+            #endif
+            let attractionsModel = NearbyAttractionsModel()
+            #if DEBUG
+            print("[DEBUG] searchNearbyAttractions: start model search at \(location.coordinate)")
+            #endif
+            attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    #if DEBUG
+                    print("[DEBUG] searchNearbyAttractions: model returned \(processedAttractions.count) attractions")
+                    #endif
+                    self.currentNearbyAttractions = processedAttractions
+                    self.nearbyAttractions = processedAttractions
+                    self.isLoadingAttractions = false
+                    if !processedAttractions.isEmpty {
+                        self.isUsingCachedData = false
+                        self.autoSaveAttractionsToCache()
+                    } else {
+                        self.isUsingCachedData = false
+                    }
                 }
             }
         }
@@ -1235,6 +1258,135 @@ class LocationViewModel: ObservableObject {
         if let original = currentNearbyAttractions as [NearbyAttraction]? {
             self.nearbyAttractions = original
         }
+    }
+    
+    // MARK: - 分階段景點搜尋整合
+    
+    /// 啟用分階段搜尋模式
+    func enableStagedSearchMode() {
+        enableStagedSearch = true
+        print("[StagedSystem] 分階段搜尋模式已啟用")
+    }
+    
+    /// 停用分階段搜尋模式
+    func disableStagedSearchMode() {
+        enableStagedSearch = false
+        print("[StagedSystem] 分階段搜尋模式已停用")
+    }
+    
+    /// 啟用分階段景點搜尋系統
+    /// - Parameter userLocation: 用戶位置
+    private func enableStagedAttractionSearch(userLocation: CLLocationCoordinate2D) {
+        Task {
+            await performStagedSearch(userLocation: userLocation)
+        }
+    }
+    
+    /// 執行分階段搜尋的主要邏輯
+    @MainActor
+    private func performStagedSearch(userLocation: CLLocationCoordinate2D) async {
+        print("[StagedSystem] 啟用分階段景點搜尋系統")
+        
+        // 顯示進度指示器
+        isProgressVisible = true
+        searchProgress = 0.0
+        currentSearchStage = "初始化搜尋系統..."
+        
+        // 建立必要的ViewModel
+        let attractionsListVM = AttractionsListViewModel()
+        let attractionsManagementVM = AttractionsManagementViewModel()
+        let detailVM = AttractionDetailViewModel(attractionName: "System")
+        
+        // 清除現有資料
+        attractionsListVM.clearAll()
+        
+        currentSearchStage = "開始分階段搜尋..."
+        searchProgress = 0.1
+        
+        // 執行分階段搜尋
+        let stagedResults = await detailVM.performStagedAttractionSearch(
+            userLocation: userLocation,
+            attractionsListVM: attractionsListVM,
+            attractionsManagementVM: attractionsManagementVM
+        )
+        
+        currentSearchStage = "處理搜尋結果..."
+        searchProgress = 0.8
+        
+        // 轉換為NearbyAttraction格式
+        let convertedAttractions = convertToNearbyAttractions(stagedResults)
+        
+        currentSearchStage = "更新地圖顯示..."
+        searchProgress = 0.9
+        
+        // 更新現有的附近景點
+        nearbyAttractions = convertedAttractions
+        currentNearbyAttractions = convertedAttractions
+        
+        // 更新狀態
+        isLoadingAttractions = false
+        isUsingCachedData = false
+        
+        currentSearchStage = "儲存搜尋結果..."
+        searchProgress = 0.95
+        
+        // 儲存到AttractionCache
+        await saveToAttractionCache(stagedResults)
+        
+        // 自動儲存到緩存
+        if !convertedAttractions.isEmpty {
+            autoSaveAttractionsToCache()
+        }
+        
+        // 完成搜尋
+        searchProgress = 1.0
+        currentSearchStage = "搜尋完成"
+        
+        // 延遲隱藏進度指示器
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+        isProgressVisible = false
+        
+        print("[StagedSystem] 分階段搜尋完成，共 \(convertedAttractions.count) 個景點")
+    }
+    
+    /// 轉換TemplateMemoryModel為NearbyAttraction
+    private func convertToNearbyAttractions(_ templateModels: [TemplateMemoryModel]) -> [NearbyAttraction] {
+        return templateModels.compactMap { template in
+            guard let name = template.names["en"],
+                  template.hasWikipediaData else {
+                return nil
+            }
+            
+            return NearbyAttraction(
+                name: name,
+                description: template.descriptions?["en"] ?? "",
+                coordinate: AttractionsCoordinate(
+                    latitude: template.latitude,
+                    longitude: template.longitude
+                ),
+                distanceFromUser: template.distanceFromUser,
+                category: .other, // 可以根據需要改進分類邏輯
+                address: template.addresses?["en"]
+            )
+        }
+    }
+    
+    /// 儲存到AttractionCache
+    private func saveToAttractionCache(_ templateModels: [TemplateMemoryModel]) async {
+        print("[CacheSystem] 儲存 \(templateModels.count) 個景點到AttractionCache")
+        
+        // 這裡可以實作實際的緩存邏輯
+        // 例如：儲存到本地檔案、Core Data或其他持久化方案
+        
+        for template in templateModels {
+            if template.hasWikipediaData {
+                let cache = template.toAttractionCache()
+                // 儲存cache到持久化儲存
+                print("[CacheSystem] 儲存景點: \(cache.names)")
+            }
+        }
+        
+        print("[CacheSystem] AttractionCache儲存完成")
     }
 }
 
