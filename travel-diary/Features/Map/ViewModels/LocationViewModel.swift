@@ -46,7 +46,12 @@ class LocationViewModel: ObservableObject {
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var showingLocationAlert = false
     @Published var currentAddress: String = "定位中..."
+    @Published var currentHeading: CLHeading?
+    
+    // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+    #if ENABLE_TRAVEL_POINTS
     @Published var travelPoints: [TravelPoint] = []
+    #endif
     @Published var locationError: Error?
     @Published var isTrackingUser: Bool = false // 是否跟隨用戶位置
     
@@ -80,7 +85,6 @@ class LocationViewModel: ObservableObject {
     @Published var attractionPanelOffset: CGFloat = 0
     
     // HIG: 方向指示相關屬性 - 符合Apple Maps標準
-    @Published var currentHeading: CLHeading?
     @Published var headingAccuracy: CLLocationDegrees = -1
     @Published var headingError: Error?
     
@@ -209,9 +213,6 @@ class LocationViewModel: ObservableObject {
     }
     
     private func handleLocationUpdate(_ location: CLLocation?) {
-        #if DEBUG
-        print("[DEBUG] handleLocationUpdate: location=\(String(describing: location?.coordinate))")
-        #endif
         guard let location = location else { return }
         currentLocation = location
         updateRegionInfoCache(for: location)
@@ -232,9 +233,6 @@ class LocationViewModel: ObservableObject {
             }
         }
         if isFirstRealLocation {
-            #if DEBUG
-            print("[DEBUG] handleLocationUpdate: first real location, trigger searchNearbyAttractions")
-            #endif
             searchNearbyAttractions()
             checkAndTriggerAttractionsSearchIfNeeded()
         }
@@ -321,6 +319,8 @@ class LocationViewModel: ObservableObject {
         locationService.requestLocationPermission()
     }
     
+    // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+    #if ENABLE_TRAVEL_POINTS
     /// 添加旅行路徑點
     func addTravelPoint() {
         guard let location = currentLocation else { return }
@@ -334,6 +334,7 @@ class LocationViewModel: ObservableObject {
         
         travelPoints.append(newPoint)
     }
+    #endif
     
     /// 中心化到當前位置並恢復自動跟隨
     func centerOnCurrentLocation() {
@@ -354,9 +355,12 @@ class LocationViewModel: ObservableObject {
     }
     
     /// 清除所有旅行路徑點
+    // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+    #if ENABLE_TRAVEL_POINTS
     func clearTravelPoints() {
         travelPoints.removeAll()
     }
+    #endif
     
     // MARK: - 搜索設置（符合HIG本地化標準）
     private func setupSearch() {
@@ -555,9 +559,6 @@ class LocationViewModel: ObservableObject {
     
     // HIG: 移動地圖到指定位置（支持不同縮放級別）
     func moveToLocation(coordinate: CLLocationCoordinate2D, zoomLevel: ZoomLevel = .neighborhood) {
-        #if DEBUG
-        print("[DEBUG] moveToLocation: coordinate=\(coordinate), zoomLevel=\(zoomLevel)")
-        #endif
         isProgrammaticUpdate = true
         let newSpan = zoomLevel.span
         withAnimation(.easeInOut(duration: 1.0)) {
@@ -583,19 +584,10 @@ class LocationViewModel: ObservableObject {
     // MARK: - MVVM: ViewModel從Model獲取數據
     /// MVVM架構：ViewModel從Model獲取處理好的景點數據
     func searchNearbyAttractions() {
-        #if DEBUG
-        print("[DEBUG] searchNearbyAttractions: currentLocation=\(String(describing: currentLocation?.coordinate)) isLoadingAttractions=\(isLoadingAttractions)")
-        #endif
         guard let location = currentLocation else { 
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractions: currentLocation is nil, abort.")
-            #endif
             return 
         }
         guard !isLoadingAttractions else {
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractions: already loading, abort.")
-            #endif
             return
         }
         
@@ -604,25 +596,13 @@ class LocationViewModel: ObservableObject {
         
         // 根據配置選擇搜尋方式
         if enableStagedSearch {
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractions: 使用分階段搜尋系統")
-            #endif
             enableStagedAttractionSearch(userLocation: location.coordinate)
             // 分階段搜尋會在完成後自動設置 isLoadingAttractions = false
         } else {
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractions: 使用傳統搜尋系統")
-            #endif
             let attractionsModel = NearbyAttractionsModel()
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractions: start model search at \(location.coordinate)")
-            #endif
             attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
                 DispatchQueue.main.async {
                     guard let self = self else { return }
-                    #if DEBUG
-                    print("[DEBUG] searchNearbyAttractions: model returned \(processedAttractions.count) attractions")
-                    #endif
                     self.currentNearbyAttractions = processedAttractions
                     self.nearbyAttractions = processedAttractions
                     self.isLoadingAttractions = false
@@ -937,60 +917,37 @@ class LocationViewModel: ObservableObject {
     
     /// 用戶要求：每次打開apps時自動搜尋幾十米至20km範圍內50個景點（公開方法供View調用）
     func autoSearchAttractionsOnAppStart() {
-        #if DEBUG
-        print("[DEBUG] autoSearchAttractionsOnAppStart: currentLocation=\(String(describing: currentLocation?.coordinate))")
-        #endif
         if currentLocation == nil {
             locationService.requestLocationPermission()
             locationService.startLocationUpdates()
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 if self.currentLocation != nil {
-                    #if DEBUG
-                    print("[DEBUG] autoSearchAttractionsOnAppStart: got location after delay, searching...")
-                    #endif
                     self.searchNearbyAttractions()
                 } else {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         if self.currentLocation != nil {
-                            #if DEBUG
-                            print("[DEBUG] autoSearchAttractionsOnAppStart: got location after second delay, searching...")
-                            #endif
                             self.searchNearbyAttractions()
                         } else {
-                            #if DEBUG
-                            print("[DEBUG] autoSearchAttractionsOnAppStart: still no location, abort.")
-                            #endif
+                            // 若仍然沒有位置，則不執行搜索
                         }
                     }
                 }
             }
         } else {
-            #if DEBUG
-            print("[DEBUG] autoSearchAttractionsOnAppStart: already have location, searching...")
-            #endif
             searchNearbyAttractions()
         }
     }
     
     /// 手動更新景點搜索（用戶點擊左下角放大鏡圖標時觸發）
     func manualRefreshAttractions() {
-        #if DEBUG
-        print("[DEBUG] manualRefreshAttractions: currentLocation=\(String(describing: currentLocation?.coordinate))")
-        #endif
         let now = Date()
         if let lastRefresh = lastManualRefreshTime {
             let timeSinceLastRefresh = now.timeIntervalSince(lastRefresh)
             if timeSinceLastRefresh < manualRefreshCooldown {
-                #if DEBUG
-                print("[DEBUG] manualRefreshAttractions: cooldown active, abort.")
-                #endif
                 return
             }
         }
         guard let location = currentLocation else {
-            #if DEBUG
-            print("[DEBUG] manualRefreshAttractions: currentLocation is nil, abort.")
-            #endif
             return
         }
         lastManualRefreshTime = now
@@ -999,15 +956,9 @@ class LocationViewModel: ObservableObject {
         isManualRefreshing = true
         isUsingCachedData = false
         let attractionsModel = NearbyAttractionsModel()
-        #if DEBUG
-        print("[DEBUG] manualRefreshAttractions: start model search at \(location.coordinate)")
-        #endif
         attractionsModel.searchNearbyAttractions(coordinate: location.coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                #if DEBUG
-                print("[DEBUG] manualRefreshAttractions: model returned \(processedAttractions.count) attractions")
-                #endif
                 self.nearbyAttractions = processedAttractions
                 self.isLoadingAttractions = false
                 self.isManualRefreshing = false
@@ -1184,14 +1135,8 @@ class LocationViewModel: ObservableObject {
     
     // 新增：地點搜尋冷卻與自動搜尋附近景點
     private func searchNearbyAttractionsForPlace(coordinate: CLLocationCoordinate2D) {
-        #if DEBUG
-        print("[DEBUG] searchNearbyAttractionsForPlace: coordinate=\(coordinate)")
-        #endif
         let now = Date()
         if let last = lastPlaceSearchTime, now.timeIntervalSince(last) < placeSearchCooldown {
-            #if DEBUG
-            print("[DEBUG] searchNearbyAttractionsForPlace: cooldown active, abort.")
-            #endif
             startPlaceSearchCooldownTimer()
             return
         }
@@ -1202,15 +1147,9 @@ class LocationViewModel: ObservableObject {
         startPlaceSearchCooldownTimer()
         isLoadingAttractions = true
         let attractionsModel = NearbyAttractionsModel()
-        #if DEBUG
-        print("[DEBUG] searchNearbyAttractionsForPlace: start model search at \(coordinate)")
-        #endif
         attractionsModel.searchNearbyAttractions(coordinate: coordinate) { [weak self] processedAttractions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                #if DEBUG
-                print("[DEBUG] searchNearbyAttractionsForPlace: model returned \(processedAttractions.count) attractions")
-                #endif
                 var attractions = processedAttractions
                 if let selected = self.selectedSearchResult {
                     let alreadyIncluded = attractions.contains { attr in
@@ -1265,13 +1204,11 @@ class LocationViewModel: ObservableObject {
     /// 啟用分階段搜尋模式
     func enableStagedSearchMode() {
         enableStagedSearch = true
-        print("[StagedSystem] 分階段搜尋模式已啟用")
     }
     
     /// 停用分階段搜尋模式
     func disableStagedSearchMode() {
         enableStagedSearch = false
-        print("[StagedSystem] 分階段搜尋模式已停用")
     }
     
     /// 啟用分階段景點搜尋系統
@@ -1285,7 +1222,6 @@ class LocationViewModel: ObservableObject {
     /// 執行分階段搜尋的主要邏輯
     @MainActor
     private func performStagedSearch(userLocation: CLLocationCoordinate2D) async {
-        print("[StagedSystem] 啟用分階段景點搜尋系統")
         
         // 顯示進度指示器
         isProgressVisible = true
@@ -1346,7 +1282,6 @@ class LocationViewModel: ObservableObject {
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
         isProgressVisible = false
         
-        print("[StagedSystem] 分階段搜尋完成，共 \(convertedAttractions.count) 個景點")
     }
     
     /// 轉換TemplateMemoryModel為NearbyAttraction
@@ -1373,24 +1308,19 @@ class LocationViewModel: ObservableObject {
     
     /// 儲存到AttractionCache
     private func saveToAttractionCache(_ templateModels: [TemplateMemoryModel]) async {
-        print("[CacheSystem] 儲存 \(templateModels.count) 個景點到AttractionCache")
-        
-        // 這裡可以實作實際的緩存邏輯
-        // 例如：儲存到本地檔案、Core Data或其他持久化方案
         
         for template in templateModels {
             if template.hasWikipediaData {
                 let cache = template.toAttractionCache()
-                // 儲存cache到持久化儲存
-                print("[CacheSystem] 儲存景點: \(cache.names)")
             }
         }
         
-        print("[CacheSystem] AttractionCache儲存完成")
     }
 }
 
 // MARK: - TravelPoint Model
+// MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+#if ENABLE_TRAVEL_POINTS
 struct TravelPoint: Identifiable, Equatable {
     let id: UUID
     let coordinate: CLLocationCoordinate2D
@@ -1401,6 +1331,7 @@ struct TravelPoint: Identifiable, Equatable {
         lhs.id == rhs.id
     }
 }
+#endif
 
 // MARK: - HIG面板狀態枚舉（遵循Apple Maps設計）
 enum AttractionPanelState {

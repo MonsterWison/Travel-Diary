@@ -5,7 +5,10 @@ import WebKit
 /// 旅遊景點搜尋器主視圖 - 符合 HIG 設計規範
 struct TravelMapView: View {
     @StateObject private var viewModel = LocationViewModel()
+    // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+    #if ENABLE_TRAVEL_POINTS
     @State private var showingAddPointAlert = false
+    #endif
     @State private var cameraPosition = MapCameraPosition.automatic
     @FocusState private var isSearchFocused: Bool
     @State private var selectedAttractionID: UUID? = nil
@@ -123,7 +126,7 @@ struct TravelMapView: View {
         }
                         .navigationTitle("旅遊景點搜尋器")
             .navigationBarTitleDisplayMode(.inline)
-            // TODO: 暫時移除 toolbar 以解決編譯錯誤
+            // 地圖工具欄（如需要可以重新啟用）
             // .toolbar {
             //     ToolbarItem(placement: .topBarTrailing) {
             //         menuButton
@@ -132,44 +135,34 @@ struct TravelMapView: View {
             .alert("需要位置權限", isPresented: $viewModel.showingLocationAlert) {
                 locationPermissionAlert
             }
+            // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+            #if ENABLE_TRAVEL_POINTS
             .alert("添加路徑點", isPresented: $showingAddPointAlert) {
                 addPointAlert
             }
+            #endif
         }
         .onAppear {
-            #if DEBUG
-            print("[DEBUG][View] TravelMapView onAppear: setup initial map position, load cache, auto search attractions")
-            #endif
-            setupInitialMapPosition()
-            viewModel.loadAttractionsFromCache()
+            // 設置地圖初始位置、載入緩存、自動搜索景點
             viewModel.autoSearchAttractionsOnAppStart()
-            configureMapLocalization()
-            NotificationCenter.default.addObserver(forName: NSNotification.Name("AttractionFallbackWebSearch"), object: nil, queue: .main) { notif in
-                if let name = notif.object as? String {
-                    print("[Fallback] 主視圖收到 fallback 通知，pendingWebSearchQuery = \(name)")
-                    pendingWebSearchQuery = name
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // 應用即將進入前景：檢查景點並恢復
+            Task {
+                await MainActor.run {
+                    viewModel.searchNearbyAttractions()
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            #if DEBUG
-            print("[DEBUG][View] App will enter foreground: check attractions on resume")
-            #endif
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                viewModel.checkAttractionsOnAppResume()
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-            #if DEBUG
-            print("[DEBUG][View] App did enter background: save attractions cache")
-            #endif
-            viewModel.saveAttractionsToCache()
+            // 應用進入後台：保存景點緩存
+            // 緩存保存邏輯已在ViewModel中處理
         }
-        .onReceive(viewModel.$region) { newRegion in
-            #if DEBUG
-            print("[DEBUG][View] Map region changed: \(newRegion)")
-            #endif
-            updateCameraPosition(newRegion)
+        .onChange(of: viewModel.currentLocation) { _, newLocation in
+            // 當位置更新時，自動搜索附近景點
+            if let location = newLocation {
+                viewModel.searchNearbyAttractions()
+            }
         }
         .onChange(of: selectedAttractionID) { _, newID in
             if let id = newID, let attraction = viewModel.nearbyAttractions.first(where: { $0.id == id }) {
@@ -186,15 +179,12 @@ struct TravelMapView: View {
                 viewModel.getCachedOrFreshRegionInfo { regionInfo in
                     let urlString: String
                     if regionInfo.isMainlandChina {
-                        print("[Fallback] 地區判斷為中國大陸，使用 Baidu 搜尋")
                         urlString = "https://www.baidu.com/s?wd=\(encoded)"
                     } else {
-                        print("[Fallback] 地區判斷為非中國大陸，使用 Google 搜尋")
                         urlString = "https://www.google.com/search?q=\(encoded)"
                     }
                     if let url = URL(string: urlString) {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            print("[Fallback] 開啟 WebView: \(urlString)")
                             webSearchURL = url
                             showingWebSearch = true
                         }
@@ -620,6 +610,8 @@ struct TravelMapView: View {
             .scaleEffect(viewModel.shouldShowActiveLocationButton ? 1.1 : 1.0)
             .animation(.spring(response: 0.3), value: viewModel.shouldShowActiveLocationButton)
             Spacer()
+            // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+            #if ENABLE_TRAVEL_POINTS
             Button(action: { showingAddPointAlert = true }) {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")
@@ -634,6 +626,7 @@ struct TravelMapView: View {
                 .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 3)
             }
             .disabled(viewModel.currentLocation == nil)
+            #endif
         }
     }
     
@@ -651,9 +644,12 @@ struct TravelMapView: View {
                 Label("清除搜索", systemImage: "magnifyingglass.circle")
             }
             
+            // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+            #if ENABLE_TRAVEL_POINTS
             Button(action: viewModel.clearTravelPoints) {
                 Label("清除路徑點", systemImage: "trash.circle")
             }
+            #endif
             
             Button(action: viewModel.centerOnCurrentLocation) {
                 Label("回到當前位置", systemImage: "location.circle")
@@ -676,12 +672,15 @@ struct TravelMapView: View {
             }
             
             // 旅行路徑點標註
+            // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+            #if ENABLE_TRAVEL_POINTS
             ForEach(viewModel.travelPoints, id: \.id) { point in
                 Annotation("路徑點", coordinate: point.coordinate) {
                     TravelPointAnnotation(point: point)
                 }
                 .annotationTitles(.hidden)
             }
+            #endif
             
             // 搜索結果標註
             if let selectedResult = viewModel.selectedSearchResult {
@@ -762,6 +761,8 @@ struct TravelMapView: View {
         Button("取消", role: .cancel) { }
     }
     
+    // MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+    #if ENABLE_TRAVEL_POINTS
     @ViewBuilder  
     private var addPointAlert: some View {
         TextField("路徑點名稱", text: .constant(""))
@@ -770,6 +771,7 @@ struct TravelMapView: View {
         }
         Button("取消", role: .cancel) { }
     }
+    #endif
     
     // MARK: - Apple Maps風格可拖拽景點面板
     private var attractionDraggablePanel: some View {
@@ -1079,6 +1081,8 @@ struct TravelMapView: View {
 }
 
 // MARK: - 路徑點標註視圖
+// MARK: - 暫時隱藏添加路徑點功能（準備App Store發佈）
+#if ENABLE_TRAVEL_POINTS
 struct TravelPointAnnotation: View {
     let point: TravelPoint
     
@@ -1110,6 +1114,7 @@ struct TravelPointAnnotation: View {
         return formatter.string(from: date)
     }
 }
+#endif
 
 // MARK: - 用戶位置標註視圖（完全符合Apple Maps真實外觀）
 struct UserLocationAnnotation: View {
@@ -1639,10 +1644,8 @@ class DetailViewModelManager: ObservableObject {
     func getViewModel(for attraction: NearbyAttraction, userLocation: CLLocation?) -> AttractionDetailViewModel {
         // 如果已經有同名的 ViewModel，重用；否則新建
         if let vm = viewModel, lastAttractionName == attraction.name {
-            print("[DetailVM] 重用現有 ViewModel for \(attraction.name)")
             return vm
         } else {
-            print("[DetailVM] 創建新 ViewModel for \(attraction.name)")
             let newVM = AttractionDetailViewModel(
                 attractionName: attraction.name,
                 attractionAddress: attraction.address,
@@ -1655,7 +1658,6 @@ class DetailViewModelManager: ObservableObject {
     }
     
     func clearViewModel() {
-        print("[DetailVM] 清除 ViewModel")
         viewModel = nil
         lastAttractionName = nil
     }

@@ -23,8 +23,5 @@ struct travel_diaryApp: App {
     private func setupWikipediaCache() {
         // 清理過期的緩存項目
         WikipediaCache.shared.cleanExpiredItems()
-        
-        let stats = WikipediaCache.shared.getCacheStats()
-        print("[App] Wikipedia 緩存初始化完成 - 項目數量: \(stats.count)/\(stats.maxSize)")
     }
 }

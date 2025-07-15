@@ -24,23 +24,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		793729BC2E26ADEF0035410D /* travel-diary.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "travel-diary.xcodeproj"; sourceTree = "<group>"; };
+		793729F62E26B5BF0035410D /* travel-diary.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "travel-diary.xcodeproj"; sourceTree = "<group>"; };
 		799E11C92E0ABBF70092B919 /* travel-diary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "travel-diary.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		799E11D62E0ABBF70092B919 /* travel-diaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "travel-diaryTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		799E11E02E0ABBF70092B919 /* travel-diaryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "travel-diaryUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		799E11CB2E0ABBF70092B919 /* travel-diary */ = {
+		799E11CB2E0ABBF70092B919 /* . */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ".";
+			path = .;
 			sourceTree = "<group>";
 		};
-		799E11D92E0ABBF70092B919 /* travel-diaryTests */ = {
+		799E11D92E0ABBF70092B919 /* ../Tests/travel-diaryTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "../Tests/travel-diaryTests";
 			sourceTree = "<group>";
 		};
-		799E11E32E0ABBF70092B919 /* travel-diaryUITests */ = {
+		799E11E32E0ABBF70092B919 /* ../Tests/travel-diaryUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "../Tests/travel-diaryUITests";
 			sourceTree = "<group>";
@@ -72,12 +74,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		793729BD2E26ADEF0035410D /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		793729F72E26B5BF0035410D /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		799E11C02E0ABBF70092B919 = {
 			isa = PBXGroup;
 			children = (
-				799E11CB2E0ABBF70092B919 /* travel-diary */,
-				799E11D92E0ABBF70092B919 /* travel-diaryTests */,
-				799E11E32E0ABBF70092B919 /* travel-diaryUITests */,
+				799E11CB2E0ABBF70092B919 /* . */,
+				799E11D92E0ABBF70092B919 /* ../Tests/travel-diaryTests */,
+				799E11E32E0ABBF70092B919 /* ../Tests/travel-diaryUITests */,
 				799E11CA2E0ABBF70092B919 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -108,7 +120,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				799E11CB2E0ABBF70092B919 /* travel-diary */,
+				799E11CB2E0ABBF70092B919 /* . */,
 			);
 			name = "travel-diary";
 			packageProductDependencies = (
@@ -131,7 +143,7 @@
 				799E11D82E0ABBF70092B919 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				799E11D92E0ABBF70092B919 /* travel-diaryTests */,
+				799E11D92E0ABBF70092B919 /* ../Tests/travel-diaryTests */,
 			);
 			name = "travel-diaryTests";
 			packageProductDependencies = (
@@ -154,7 +166,7 @@
 				799E11E22E0ABBF70092B919 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				799E11E32E0ABBF70092B919 /* travel-diaryUITests */,
+				799E11E32E0ABBF70092B919 /* ../Tests/travel-diaryUITests */,
 			);
 			name = "travel-diaryUITests";
 			packageProductDependencies = (
@@ -198,6 +210,16 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 799E11CA2E0ABBF70092B919 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 793729BD2E26ADEF0035410D /* Products */;
+					ProjectRef = 793729BC2E26ADEF0035410D /* travel-diary.xcodeproj */;
+				},
+				{
+					ProductGroup = 793729F72E26B5BF0035410D /* Products */;
+					ProjectRef = 793729F62E26B5BF0035410D /* travel-diary.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				799E11C82E0ABBF70092B919 /* travel-diary */,
@@ -399,6 +421,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "旅遊景點搜尋器";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來搜尋附近的旅遊景點，為您提供個人化的景點搜尋體驗。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -410,7 +433,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.wilsonho.travelDiary;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.wilsonho.-online.monsterwilson.AttractionFinder";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -433,6 +456,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "旅遊景點搜尋器";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "此應用需要使用您的位置來搜尋附近的旅遊景點，為您提供個人化的景點搜尋體驗。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -444,7 +468,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.wilsonho.travelDiary;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.wilsonho.-online.monsterwilson.AttractionFinder";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

@@ -382,7 +382,7 @@ class AttractionsManagementViewModel: ObservableObject {
         }
         
         // 7. 調試輸出（可選）
-        printScoringResults(scoringResults, bestScore: bestScore)
+        // printScoringResults(scoringResults, bestScore: bestScore) // 移除 print
         
         return bestCandidate
     }
@@ -419,13 +419,13 @@ class AttractionsManagementViewModel: ObservableObject {
     
     // 調試輸出
     private func printScoringResults(_ results: [(AttractionCache, Double, String)], bestScore: Double) {
-        print("=== 三維搜尋評分結果 ===")
+        // print("=== 三維搜尋評分結果 ===") // 移除 print
         let sortedResults = results.sorted { $0.1 > $1.1 }
         for (index, (candidate, score, breakdown)) in sortedResults.prefix(5).enumerated() {
             let marker = score == bestScore ? "🏆" : "📍"
-            print("\(marker) \(index + 1). \(candidate.names["en"] ?? "Unknown") - \(breakdown)")
+            // print("\(marker) \(index + 1). \(candidate.names["en"] ?? "Unknown") - \(breakdown)") // 移除 print
         }
-        print("========================")
+        // print("========================") // 移除 print
     }
     
     // MARK: - 輔助方法
@@ -510,7 +510,7 @@ class AttractionsManagementViewModel: ObservableObject {
         attractionCoordinate: CLLocationCoordinate2D
     ) async -> (title: String, summary: String, thumbnailURL: String?)? {
         
-        print("[3DSearch] 開始三維搜尋: \(attractionName)")
+        // print("[3DSearch] 開始三維搜尋: \(attractionName)") // 移除 print
         
         // 建立CompareModel
         let compareModel = CompareModel(
@@ -534,11 +534,11 @@ class AttractionsManagementViewModel: ObservableObject {
             let title = bestMatch.names["en"] ?? bestMatch.names.values.first ?? attractionName
             let summary = bestMatch.descriptions?["en"] ?? bestMatch.descriptions?.values.first ?? ""
             
-            print("[3DSearch] 找到最佳匹配: \(title)")
+            // print("[3DSearch] 找到最佳匹配: \(title)") // 移除 print
             return (title: title, summary: summary, thumbnailURL: nil)
         }
         
-        print("[3DSearch] 未找到合適匹配: \(attractionName)")
+        // print("[3DSearch] 未找到合適匹配: \(attractionName)") // 移除 print
         return nil
     }
     
@@ -565,5 +565,36 @@ class AttractionsManagementViewModel: ObservableObject {
                 continuation.resume(returning: mockResults)
             }
         }
+    }
+    
+    /// 顯示三維搜尋評分結果（僅在測試時使用）
+    private func displaySearchResults(_ results: [(candidate: AttractionCache, totalScore: Double, breakdown: String)]) {
+        // 評分結果現在僅用於調試，在生產環境中不輸出
+        if results.isEmpty {
+            return
+        }
+        
+        let sortedResults = results.sorted { $0.totalScore > $1.totalScore }
+        
+        // 可以在這裡添加日誌記錄，但不在控制台輸出
+        for (index, result) in sortedResults.enumerated() {
+            let marker = index == 0 ? "🏆" : "📍"
+            // 保留結果但不輸出到控制台
+        }
+    }
+    
+    /// 使用三維搜尋系統尋找最佳匹配的景點
+    func findBestMatchFor(attractionName: String, coordinate: CLLocationCoordinate2D) -> AttractionCache? {
+        // 檢查是否有已緩存的景點資料
+        guard !attractionCandidates.isEmpty else {
+            return nil
+        }
+        
+        // 使用三維搜尋系統找到最佳匹配
+        if let bestMatch = findBestMatchWithAdvanced3DSearch() {
+            return bestMatch
+        }
+        
+        return nil
     }
 } 

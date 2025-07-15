@@ -236,9 +236,6 @@ class NearbyAttractionsModel {
     /// 4. 去重保留最近的
     /// 5. 限制為前50個
     func searchNearbyAttractions(coordinate: CLLocationCoordinate2D, completion: @escaping ([NearbyAttraction]) -> Void) {
-        #if DEBUG
-        print("[DEBUG][Model] searchNearbyAttractions: center=\(coordinate)")
-        #endif
         self.searchCenterCoordinate = coordinate
         allSearchResults.removeAll()
         processedAttractions.removeAll()
@@ -246,22 +243,13 @@ class NearbyAttractionsModel {
         var completedSearches = 0
         for keyword in tourismKeywords {
             group.enter()
-            #if DEBUG
-            print("[DEBUG][Model] searchSingleKeyword: \(keyword) at \(coordinate)")
-            #endif
             searchSingleKeyword(keyword: keyword, coordinate: coordinate) { results in
                 defer { group.leave() }
                 completedSearches += 1
-                #if DEBUG
-                print("[DEBUG][Model] searchSingleKeyword: \(keyword) got \(results.count) results")
-                #endif
                 self.allSearchResults.append(contentsOf: results)
             }
         }
         group.notify(queue: .main) {
-            #if DEBUG
-            print("[DEBUG][Model] All keyword searches complete. Total raw results: \(self.allSearchResults.count)")
-            #endif
             self.processCollectedData(completion: completion)
         }
     }
@@ -298,16 +286,10 @@ class NearbyAttractionsModel {
         let search = MKLocalSearch(request: request)
         search.start { response, error in
             if error != nil {
-                #if DEBUG
-                print("[DEBUG][Model] searchSingleKeyword: \(keyword) error: \(error!)")
-                #endif
                 completion([])
                 return
             }
             guard let response = response else {
-                #if DEBUG
-                print("[DEBUG][Model] searchSingleKeyword: \(keyword) no response")
-                #endif
                 completion([])
                 return
             }
@@ -327,18 +309,12 @@ class NearbyAttractionsModel {
                     address: self.formatAddress(item.placemark)
                 )
             }
-            #if DEBUG
-            print("[DEBUG][Model] searchSingleKeyword: \(keyword) final mapped attractions: \(attractions.count)")
-            #endif
             completion(attractions)
         }
     }
     
     /// 處理收集到的數據：合併、排序、去重、限制數量
     private func processCollectedData(completion: @escaping ([NearbyAttraction]) -> Void) {
-        #if DEBUG
-        print("[DEBUG][Model] processCollectedData: allSearchResults=\(allSearchResults.count)")
-        #endif
         let sortedResults = allSearchResults.sorted { $0.distanceFromUser < $1.distanceFromUser }
         var uniqueAttractions: [String: NearbyAttraction] = [:]
         for attraction in sortedResults {
@@ -352,9 +328,6 @@ class NearbyAttractionsModel {
         let finalResults = uniqueResults.sorted { $0.distanceFromUser < $1.distanceFromUser }
             .prefix(50)
         processedAttractions = Array(finalResults)
-        #if DEBUG
-        print("[DEBUG][Model] processCollectedData: uniqueResults=\(uniqueResults.count), finalResults=\(processedAttractions.count)")
-        #endif
         completion(processedAttractions)
     }
     

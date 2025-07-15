@@ -45,36 +45,27 @@ class WikipediaCache: ObservableObject {
     func getCachedItem(for name: String, language: String) -> WikipediaCacheItem? {
         let queryKey = generateQueryKey(name: name, language: language)
         
-        print("[WikiCache] 查詢鍵: \(queryKey)")
-        print("[WikiCache] 當前緩存項目數: \(cacheItems.count)")
-        
         if let item = cacheItems.first(where: { $0.queryKey == queryKey }) {
             // 嚴格驗證緩存項目的名稱匹配度
             let matchScore = calculateCacheMatchScore(queryName: name, cachedTitle: item.title)
-            print("[WikiCache] 緩存項目匹配分數: \(matchScore) - 查詢: \(name) vs 緩存: \(item.title)")
             
             // 如果匹配度不足，自動清除該緩存項目
             if matchScore < 0.6 {
-                print("[WikiCache] ❌ 緩存項目匹配度不足，自動清除: \(item.title) (分數: \(matchScore))")
                 removeCachedItem(for: name, language: language)
                 return nil
             }
             
             // 額外檢查：確保有實質的詞語重疊
             if !hasSubstantialWordOverlap(queryName: name, cachedTitle: item.title) {
-                print("[WikiCache] ❌ 緩存項目缺乏實質詞語重疊，自動清除: \(item.title)")
                 removeCachedItem(for: name, language: language)
                 return nil
             }
             
             // 更新訪問時間（LRU 策略）
             updateItemTimestamp(queryKey: queryKey)
-            print("[WikiCache] ✅ 緩存項目通過嚴格驗證: \(name) (\(language)) - 標題: \(item.title)")
             return item
         }
         
-        print("[WikiCache] ❌ 無緩存資料: \(name) (\(language))")
-        print("[WikiCache] 現有緩存鍵: \(cacheItems.map { $0.queryKey }.joined(separator: ", "))")
         return nil
     }
     
@@ -102,8 +93,6 @@ class WikipediaCache: ObservableObject {
         
         // 保存到本地存儲
         saveCacheToStorage()
-        
-        print("[WikiCache] 💾 緩存新資料: \(title) (\(language)) - 查詢鍵: \(queryKey) - 總數: \(cacheItems.count)/\(maxCacheSize)")
     }
     
     /// 清除特定的緩存項目
@@ -114,7 +103,6 @@ class WikipediaCache: ObservableObject {
         
         if cacheItems.count < originalCount {
             saveCacheToStorage()
-            print("[WikiCache] 🗑️ 已清除錯誤緩存: \(name) (\(language)) - 查詢鍵: \(queryKey)")
         }
     }
     
@@ -122,7 +110,6 @@ class WikipediaCache: ObservableObject {
     func clearAllCache() {
         cacheItems.removeAll()
         saveCacheToStorage()
-        print("[WikiCache] 🗑️ 已清除所有緩存")
     }
     
     /// 更新項目時間戳（LRU 策略）
@@ -150,7 +137,6 @@ class WikipediaCache: ObservableObject {
     func clearCache() {
         cacheItems.removeAll()
         userDefaults.removeObject(forKey: cacheKey)
-        print("[WikiCache] 清空所有緩存")
     }
     
     /// 獲取緩存統計信息
@@ -171,15 +157,13 @@ class WikipediaCache: ObservableObject {
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(cacheItems)
             userDefaults.set(data, forKey: cacheKey)
-            print("[WikiCache] 緩存已保存到本地存儲")
         } catch {
-            print("[WikiCache] 保存緩存失敗: \(error.localizedDescription)")
+            // 保存失敗，但不影響正常使用
         }
     }
     
     private func loadCacheFromStorage() {
         guard let data = userDefaults.data(forKey: cacheKey) else {
-            print("[WikiCache] 無本地緩存數據")
             return
         }
         
@@ -191,9 +175,8 @@ class WikipediaCache: ObservableObject {
             // 按時間戳排序（最新的在前）
             cacheItems.sort { $0.timestamp > $1.timestamp }
             
-            print("[WikiCache] 從本地存儲載入 \(cacheItems.count) 個緩存項目")
         } catch {
-            print("[WikiCache] 載入緩存失敗: \(error.localizedDescription)")
+            // 載入失敗，使用空緩存
             cacheItems = []
         }
     }
@@ -209,7 +192,6 @@ class WikipediaCache: ObservableObject {
         
         if cacheItems.count != originalCount {
             saveCacheToStorage()
-            print("[WikiCache] 清理過期緩存: \(originalCount - cacheItems.count) 個項目")
         }
     }
     

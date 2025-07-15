@@ -27,16 +27,8 @@ class AttractionDetailViewModel: ObservableObject {
         self.attractionName = attractionName
         self.attractionAddress = attractionAddress
         self.attractionCoordinate = attractionCoordinate
-        print("[DetailVM] 初始化 ViewModel for \(attractionName)")
-        if let address = attractionAddress {
-            print("[DetailVM] 景點地址: \(address)")
-        }
-        if let coord = attractionCoordinate {
-            print("[DetailVM] 景點坐標: \(coord.latitude), \(coord.longitude)")
-        }
         // 嚴格：如果已有正確資料，直接 return
         if !self.wikipediaTitle.isEmpty && !self.wikipediaSummary.isEmpty {
-            print("[DetailVM] 已有正確 Wikipedia 資料，跳過查詢")
             return
         }
         loadWikipediaData()
@@ -45,41 +37,31 @@ class AttractionDetailViewModel: ObservableObject {
     // MARK: - Wikipedia 資料載入
     
     private func loadWikipediaData() {
-        print("[Wiki] 開始載入 Wikipedia 資料: \(attractionName)")
-        
         // 首先檢查緩存是否有百分百匹配的資料
         if let cachedItem = findExactMatchInCache() {
-            print("[Wiki] ✅ 找到百分百匹配的緩存資料: \(cachedItem.title)")
-            
             // 對緩存的資料進行嚴格的名稱匹配驗證
             let nameMatchScore = calculateNameMatchScore(
                 attractionName: attractionName,
                 wikipediaTitle: cachedItem.title
             )
             
-            print("[Wiki] 緩存資料名稱匹配分數: \(nameMatchScore) - 景點: \(attractionName) vs 緩存: \(cachedItem.title)")
-            
             // 嚴格的匹配閾值 - 從0.2提高到0.6，確保高質量匹配
             if nameMatchScore < 0.6 {
-                print("[Wiki] ❌ 緩存資料匹配度不足，清除並重新查詢: \(cachedItem.title) (分數: \(nameMatchScore))")
                 wikipediaCache.removeCachedItem(for: attractionName, language: cachedItem.language)
             } else {
                 // 額外檢查：確保有實質的詞語重疊
                 if hasSubstantialWordOverlap(attractionName: attractionName, wikipediaTitle: cachedItem.title) {
-                    print("[Wiki] ✅ 緩存資料通過嚴格驗證，使用緩存: \(cachedItem.title)")
                     self.wikipediaTitle = cachedItem.title
                     self.wikipediaSummary = cachedItem.summary
                     self.wikipediaThumbnailURL = cachedItem.thumbnailURL
                     return
                 } else {
-                    print("[Wiki] ❌ 緩存資料缺乏實質詞語重疊，清除並重新查詢: \(cachedItem.title)")
                     wikipediaCache.removeCachedItem(for: attractionName, language: cachedItem.language)
                 }
             }
         }
         
         // 沒有找到緩存，從 Wikipedia API 獲取資料
-        print("[Wiki] 緩存中無有效匹配，開始從 Wikipedia API 獲取資料")
         isLoading = true
         errorMessage = nil
         
@@ -92,11 +74,9 @@ class AttractionDetailViewModel: ObservableObject {
         // 嘗試所有支持的語言，尋找百分百匹配
         for language in supportedLanguages {
             if let cachedItem = wikipediaCache.getCachedItem(for: attractionName, language: language) {
-                print("[Wiki] 百分百匹配找到: \(attractionName) (\(language))")
                 return cachedItem
             }
         }
-        print("[Wiki] 無百分百匹配的緩存資料: \(attractionName)")
         return nil
     }
     
@@ -104,20 +84,16 @@ class AttractionDetailViewModel: ObservableObject {
     
     /// 從 Wikipedia API 獲取景點資料 - 優化版本（並行搜索）
     private func fetchFromWikipediaAPI(attractionName: String) async {
-        print("[Wiki] 開始從 Wikipedia API 獲取: \(attractionName)")
         
         // 智能語言選擇 - 只選擇最相關的3-4種語言
         let allLanguages = getLanguagePriority(for: attractionName)
         let priorityLanguages = Array(allLanguages.prefix(4)) // 只搜索前4種語言
-        
-        print("[Wiki] 🚀 並行搜索語言: \(priorityLanguages.joined(separator: ", "))")
         
         // 並行搜索多種語言
         await withTaskGroup(of: (String, (title: String, summary: String, thumbnailURL: String?)?).self) { group in
             // 為每種語言創建並行任務
             for language in priorityLanguages {
                 group.addTask {
-                    print("[Wiki] 🔍 並行搜索語言: \(language)")
                     let result = await self.searchWikipediaWithTimeout(
                         query: attractionName, 
                         language: language, 
@@ -135,15 +111,11 @@ class AttractionDetailViewModel: ObservableObject {
             for await (language, result) in group {
                 guard let data = result else { continue }
                 
-                print("[Wiki] ✅ 語言 \(language) 搜索完成: \(data.title)")
-                
                 // 計算匹配分數
                 let nameScore = calculateNameMatchScore(
                     attractionName: attractionName,
                     wikipediaTitle: data.title
                 )
-                
-                print("[Wiki] 📊 語言 \(language) 名稱匹配分數: \(nameScore)")
                 
                 // 檢查是否有實質重疊
                 let hasOverlap = hasSubstantialWordOverlap(
@@ -152,13 +124,11 @@ class AttractionDetailViewModel: ObservableObject {
                 )
                 
                 if !hasOverlap {
-                    print("[Wiki] ⚠️ 語言 \(language) 無實質詞語重疊，跳過")
                     continue
                 }
                 
                 // 如果名稱匹配度很高（>0.8），立即使用並停止其他搜索
                 if nameScore > 0.8 {
-                    print("[Wiki] 🎯 找到高質量匹配（分數: \(nameScore)），立即使用: \(data.title)")
                     bestResult = (language, data)
                     bestScore = nameScore
                     break // 早期終止
@@ -194,7 +164,6 @@ class AttractionDetailViewModel: ObservableObject {
                 await MainActor.run {
                     self.errorMessage = "無法找到匹配的 Wikipedia 資料"
                     self.isLoading = false
-                    print("[Wiki] ❌ 所有並行搜索都無法找到匹配的資料: \(attractionName)")
                 }
             }
         }
@@ -207,7 +176,6 @@ class AttractionDetailViewModel: ObservableObject {
         data: (title: String, summary: String, thumbnailURL: String?),
         nameScore: Double
     ) async {
-        print("[Wiki] 🏆 處理最佳結果: \(data.title) (語言: \(language), 分數: \(nameScore))")
         let hasOverlap = hasSubstantialWordOverlap(
             attractionName: attractionName,
             wikipediaTitle: data.title
@@ -223,7 +191,6 @@ class AttractionDetailViewModel: ObservableObject {
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] ✅ 主體詞分詞交集 >=2，直接顯示 Wikipedia 資料: \(data.title)")
             }
             wikipediaCache.cacheItem(
                 name: attractionName,
@@ -239,7 +206,6 @@ class AttractionDetailViewModel: ObservableObject {
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] ✅ 主體詞完全包含，直接顯示 Wikipedia 資料: \(data.title)")
             }
             wikipediaCache.cacheItem(
                 name: attractionName,
@@ -255,7 +221,6 @@ class AttractionDetailViewModel: ObservableObject {
                 self.wikipediaSummary = data.summary
                 self.wikipediaThumbnailURL = data.thumbnailURL
                 self.isLoading = false
-                print("[Wiki] ✅ 名稱分數高且有重疊，直接顯示 Wikipedia 資料: \(data.title)")
             }
             wikipediaCache.cacheItem(
                 name: attractionName,
@@ -278,7 +243,6 @@ class AttractionDetailViewModel: ObservableObject {
                     self.wikipediaSummary = data.summary
                     self.wikipediaThumbnailURL = data.thumbnailURL
                     self.isLoading = false
-                    print("[Wiki] ✅ 中等分數且地址驗證通過，顯示 Wikipedia 資料: \(data.title)")
                 }
                 wikipediaCache.cacheItem(
                     name: attractionName,
@@ -297,7 +261,6 @@ class AttractionDetailViewModel: ObservableObject {
             self.wikipediaThumbnailURL = nil
             self.isLoading = false
             self.errorMessage = "無法找到匹配的 Wikipedia 資料"
-            print("[Wiki] ❌ 嚴格比對失敗，顯示錯誤訊息")
         }
     }
     private func processFallbackResult(
@@ -312,7 +275,6 @@ class AttractionDetailViewModel: ObservableObject {
             self.wikipediaThumbnailURL = nil
             self.isLoading = false
             self.errorMessage = "無法找到匹配的 Wikipedia 資料"
-            print("[Wiki] ❌ 嚴格禁止備用結果顯示")
         }
     }
     
@@ -357,55 +319,42 @@ class AttractionDetailViewModel: ObservableObject {
     private func getLanguagePriority(for attractionName: String) -> [String] {
         let name = attractionName.lowercased()
         
-        print("[Wiki] 原始景點名稱: \(attractionName)")
-        
         // 根據景點名稱特徵選擇最相關的語言（限制為3-4種）
         if containsChineseCharacters(name) {
             // 中文名稱：中文、英文、日文
-            print("[Wiki] 檢測到中文字符，使用中文優先: zh -> en -> ja")
             return ["zh", "en", "ja"]
         } else if containsJapaneseCharacters(name) {
             // 日文名稱：日文、英文、中文
-            print("[Wiki] 檢測到日文字符，使用日文優先: ja -> en -> zh")
             return ["ja", "en", "zh"]
         } else if containsKoreanCharacters(name) {
             // 韓文名稱：韓文、英文、中文
-            print("[Wiki] 檢測到韓文字符，使用韓文優先: ko -> en -> zh")
             return ["ko", "en", "zh"]
         } else if containsArabicCharacters(name) {
             // 阿拉伯文名稱：阿拉伯文、英文
-            print("[Wiki] 檢測到阿拉伯文字符，使用阿拉伯文優先: ar -> en")
             return ["ar", "en"]
         } else if name.contains("château") || name.contains("musée") || name.contains("cathédrale") || name.contains("église") {
             // 法語景點：法語、英文
-            print("[Wiki] 檢測到法語景點標識，使用法語優先: fr -> en")
             return ["fr", "en"]
         } else if name.contains("museo") || name.contains("catedral") || name.contains("plaza") || name.contains("iglesia") {
             // 西班牙語景點：西班牙語、英文
-            print("[Wiki] 檢測到西班牙語景點標識，使用西班牙語優先: es -> en")
             return ["es", "en"]
         } else if name.contains("museo") || name.contains("cattedrale") || name.contains("piazza") || name.contains("chiesa") {
             // 義大利語景點：義大利語、英文
-            print("[Wiki] 檢測到義大利語景點標識，使用義大利語優先: it -> en")
             return ["it", "en"]
         } else if name.contains("museu") || name.contains("catedral") || name.contains("praça") || name.contains("igreja") {
             // 葡萄牙語景點：葡萄牙語、英文
-            print("[Wiki] 檢測到葡萄牙語景點標識，使用葡萄牙語優先: pt -> en")
             return ["pt", "en"]
         } else if name.contains("музей") || name.contains("собор") || name.contains("площадь") || name.contains("церковь") {
             // 俄語景點：俄語、英文
-            print("[Wiki] 檢測到俄語景點標識，使用俄語優先: ru -> en")
             return ["ru", "en"]
         } else if name.contains("museum") || name.contains("cathedral") || name.contains("church") || name.contains("palace") || 
                   name.contains("castle") || name.contains("tower") || name.contains("bridge") || name.contains("square") ||
                   name.contains("gallery") || name.contains("center") || name.contains("centre") || name.contains("park") ||
                   name.contains("garden") || name.contains("beach") || name.contains("temple") || name.contains("shrine") {
             // 明確的英語景點標識：英文、中文、法文、德文
-            print("[Wiki] 檢測到英語景點標識，使用英文優先: en -> zh -> fr -> de")
             return ["en", "zh", "fr", "de"]
         } else {
             // 其他情況：英文、中文、法文
-            print("[Wiki] 使用默認英文優先策略: en -> zh -> fr")
             return ["en", "zh", "fr"]
         }
     }
@@ -509,10 +458,6 @@ class AttractionDetailViewModel: ObservableObject {
         
         let hasOverlap = !meaningfulOverlap.isEmpty || !partialMatches.isEmpty
         
-        print("[Wiki] 詞語重疊檢查 - 景點: \(attractionWords) vs Wikipedia: \(wikipediaWords)")
-        print("[Wiki] 有意義重疊: \(meaningfulOverlap), 部分匹配: \(partialMatches)")
-        print("[Wiki] 實質重疊結果: \(hasOverlap)")
-        
         return hasOverlap
     }
     
@@ -535,11 +480,6 @@ class AttractionDetailViewModel: ObservableObject {
         // 如果景點名稱中沒有任何關鍵詞出現在Wikipedia內容中，則認為完全不相關
         let isUnrelated = !hasAnyKeyword && attractionKeywords.count > 0
         
-        if isUnrelated {
-            print("[Wiki] 內容完全不相關檢查 - 景點關鍵詞: \(attractionKeywords)")
-            print("[Wiki] Wikipedia內容未包含任何景點關鍵詞")
-        }
-        
         return isUnrelated
     }
     
@@ -553,18 +493,11 @@ class AttractionDetailViewModel: ObservableObject {
         attractionCoordinate: CLLocationCoordinate2D?
     ) async -> Bool {
         
-        print("[Wiki] 開始地址驗證:")
-        print("[Wiki] 景點地址: \(attractionAddress)")
-        print("[Wiki] Wikipedia 標題: \(wikipediaTitle)")
-        print("[Wiki] Wikipedia 摘要: \(wikipediaSummary.prefix(100))...")
-        
         // 1. 提取景點地址的關鍵地名
         let attractionLocationKeywords = extractLocationKeywords(from: attractionAddress)
-        print("[Wiki] 景點地址關鍵詞: \(attractionLocationKeywords)")
         
         // 2. 提取 Wikipedia 內容的地址信息
         let wikipediaLocationKeywords = extractLocationKeywords(from: wikipediaSummary)
-        print("[Wiki] Wikipedia 地址關鍵詞: \(wikipediaLocationKeywords)")
         
         // 3. 計算地址匹配度
         let matchScore = calculateLocationMatchScore(
@@ -572,16 +505,8 @@ class AttractionDetailViewModel: ObservableObject {
             wikipediaKeywords: wikipediaLocationKeywords
         )
         
-        print("[Wiki] 地址匹配分數: \(matchScore)")
-        
         // 4. 判斷是否匹配（匹配分數 > 0.5 認為是有效匹配 - 從0.3提高到0.5）
         let isValid = matchScore > 0.5
-        
-        if isValid {
-            print("[Wiki] ✅ 地址驗證通過 (分數: \(matchScore))")
-        } else {
-            print("[Wiki] ❌ 地址驗證失敗 (分數: \(matchScore)) - 可能是不同的景點")
-        }
         
         return isValid
     }
@@ -706,7 +631,6 @@ class AttractionDetailViewModel: ObservableObject {
         }
         
         // 如果直接查詢失敗，使用搜索API查找相似頁面
-        print("[Wiki] 🔍 直接查詢失敗，嘗試搜索API: \(query)")
         return await searchWikipediaPages(query: query, language: language)
     }
     
@@ -734,31 +658,20 @@ class AttractionDetailViewModel: ObservableObject {
         
         let urlString = "https://\(apiLanguage).wikipedia.org/api/rest_v1/page/summary/\(searchQuery)"
         
-        print("[Wiki] 🌐 構建API請求 - 原始查詢: \(query)")
-        print("[Wiki] 🌐 編碼後查詢: \(searchQuery)")
-        print("[Wiki] 🌐 目標語言: \(language) -> API語言: \(apiLanguage)")
-        print("[Wiki] 🌐 請求URL: \(urlString)")
-        
         guard let url = URL(string: urlString) else {
-            print("[Wiki] ❌ 無效的URL: \(urlString)")
             return nil
         }
         
         do {
-            print("[Wiki] 🔄 發送HTTP請求...")
             let (data, response) = try await URLSession.shared.data(from: url)
             
             if let httpResponse = response as? HTTPURLResponse {
-                print("[Wiki] 📡 HTTP 狀態碼: \(httpResponse.statusCode)")
-                print("[Wiki] 📡 回應大小: \(data.count) bytes")
                 
                 if httpResponse.statusCode == 404 {
-                    print("[Wiki] ❌ 頁面不存在: \(query) (\(language))")
                     return nil
                 }
                 
                 guard httpResponse.statusCode == 200 else {
-                    print("[Wiki] ❌ HTTP 錯誤: \(httpResponse.statusCode)")
                     return nil
                 }
             }
@@ -767,19 +680,14 @@ class AttractionDetailViewModel: ObservableObject {
             
             guard let title = json?["title"] as? String,
                   let extract = json?["extract"] as? String else {
-                print("[Wiki] ❌ 無效的JSON結構")
                 return nil
             }
             
             let thumbnailURL = (json?["thumbnail"] as? [String: Any])?["source"] as? String
             
-            print("[Wiki] ✅ 成功獲取資料: \(title)")
-            print("[Wiki] 📝 摘要長度: \(extract.count) 字符")
-            
             return (title: title, summary: extract, thumbnailURL: thumbnailURL)
             
         } catch {
-            print("[Wiki] ❌ 網絡錯誤: \(error.localizedDescription)")
             return nil
         }
     }
@@ -815,10 +723,7 @@ class AttractionDetailViewModel: ObservableObject {
             // 使用Wikipedia搜索API
             let searchUrlString = "https://\(apiLanguage).wikipedia.org/w/api.php?action=query&format=json&list=search&srsearch=\(encodedQuery)&srlimit=5"
             
-            print("[Wiki] 🔍 搜索API URL: \(searchUrlString)")
-            
             guard let searchUrl = URL(string: searchUrlString) else {
-                print("[Wiki] ❌ 無效的搜索URL: \(searchUrlString)")
                 continue
             }
             
@@ -826,9 +731,7 @@ class AttractionDetailViewModel: ObservableObject {
                 let (searchData, searchResponse) = try await URLSession.shared.data(from: searchUrl)
                 
                 if let httpResponse = searchResponse as? HTTPURLResponse {
-                    print("[Wiki] 🔍 搜索API 狀態碼: \(httpResponse.statusCode)")
                     guard httpResponse.statusCode == 200 else {
-                        print("[Wiki] ❌ 搜索API 錯誤: \(httpResponse.statusCode)")
                         continue
                     }
                 }
@@ -838,15 +741,12 @@ class AttractionDetailViewModel: ObservableObject {
                 guard let queryData = searchJson?["query"] as? [String: Any],
                       let searchResults = queryData["search"] as? [[String: Any]],
                       !searchResults.isEmpty else {
-                    print("[Wiki] ❌ 搜索無結果: \(searchVariant)")
                     continue
                 }
                 
                 // 收集所有搜索結果作為候選
                 for result in searchResults {
                     guard let pageTitle = result["title"] as? String else { continue }
-                    
-                    print("[Wiki] 🔍 收集候選結果: \(pageTitle)")
                     
                     // 獲取頁面詳細資料
                     if let pageResult = await fetchWikipediaPageDirect(query: pageTitle, language: language) {
@@ -861,24 +761,20 @@ class AttractionDetailViewModel: ObservableObject {
                         )
                         
                         allCandidates.append(candidate)
-                        print("[Wiki] ✅ 添加候選結果: \(pageResult.title)")
                     }
                 }
                 
             } catch {
-                print("[Wiki] ❌ 搜索API 錯誤: \(error.localizedDescription)")
                 continue
             }
         }
         
         // 如果沒有候選結果，返回nil
         guard !allCandidates.isEmpty else {
-            print("[Wiki] ❌ 沒有候選結果進行三維搜尋: \(query)")
             return nil
         }
         
         // 使用Google三維搜尋系統選擇最佳匹配
-        print("[Wiki] 🚀 啟動Google三維搜尋系統，候選數量: \(allCandidates.count)")
         
         // 設置比對模型
         let compareModel = CompareModel(
@@ -900,7 +796,6 @@ class AttractionDetailViewModel: ObservableObject {
         }
         
         if let bestMatch = bestMatch {
-            print("[Wiki] 🎯 三維搜尋找到最佳匹配: \(bestMatch.names[language] ?? "Unknown")")
             
             // 轉換為返回格式
             let title = bestMatch.names[language] ?? bestMatch.names.values.first ?? ""
@@ -909,7 +804,6 @@ class AttractionDetailViewModel: ObservableObject {
             
             return (title: title, summary: summary, thumbnailURL: thumbnailURL)
         } else {
-            print("[Wiki] ❌ 三維搜尋未找到合適匹配: \(query)")
             return nil
         }
     }
@@ -935,7 +829,6 @@ class AttractionDetailViewModel: ObservableObject {
                 let withoutSuffix = String(query.dropLast(suffix.count + 1))
                 if !withoutSuffix.isEmpty {
                     queries.append(withoutSuffix)
-                    print("[Wiki] 🔍 生成搜索變體（移除後綴）: \(withoutSuffix)")
                 }
             }
         }
@@ -957,7 +850,6 @@ class AttractionDetailViewModel: ObservableObject {
                     .replacingOccurrences(of: " \(abbrev)$", with: " \(expansion)", options: [.caseInsensitive, .regularExpression])
                 if expanded != query {
                     queries.append(expanded)
-                    print("[Wiki] 🔍 生成搜索變體（展開縮寫）: \(expanded)")
                 }
             }
         }
@@ -968,7 +860,6 @@ class AttractionDetailViewModel: ObservableObject {
             if !lowercaseQuery.hasPrefix(prefix) {
                 let withPrefix = prefix + query
                 queries.append(withPrefix)
-                print("[Wiki] 🔍 生成搜索變體（添加前綴）: \(withPrefix)")
             }
         }
         
@@ -978,23 +869,19 @@ class AttractionDetailViewModel: ObservableObject {
     // MARK: - 公共方法
     
     func refresh() {
-        print("[Wiki] 手動重新載入資料: \(attractionName)")
         loadWikipediaData()
     }
     
     func updateAttraction(name: String, address: String? = nil, coordinate: CLLocationCoordinate2D? = nil) {
         guard name != attractionName else { return }
         
-        print("[Wiki] 更新景點名稱: \(attractionName) -> \(name)")
         self.attractionName = name
         self.attractionAddress = address
         self.attractionCoordinate = coordinate
         
         if let address = address {
-            print("[Wiki] 更新景點地址: \(address)")
         }
         if let coord = coordinate {
-            print("[Wiki] 更新景點坐標: \(coord.latitude), \(coord.longitude)")
         }
         
         // 重置狀態
@@ -1044,7 +931,6 @@ class AttractionDetailViewModel: ObservableObject {
         attractionsListVM: AttractionsListViewModel,
         attractionsManagementVM: AttractionsManagementViewModel
     ) async -> [TemplateMemoryModel] {
-        print("[StagedSearch] 開始分階段景點搜尋")
         
         var allAttractions: [TemplateMemoryModel] = []
         let searchStages = [
@@ -1063,11 +949,8 @@ class AttractionDetailViewModel: ObservableObject {
         for stage in searchStages {
             // 檢查是否已達到50個景點限制
             if attractionsListVM.hasReachedMaxLimit {
-                print("[StagedSearch] 已達到50個景點限制，停止搜尋")
                 break
             }
-            
-            print("[StagedSearch] 搜尋階段: \(stage.label)")
             
             // 1. 搜尋該階段的景點
             let stageAttractions = await searchAttractionsInRange(
@@ -1093,16 +976,12 @@ class AttractionDetailViewModel: ObservableObject {
                 with: allAttractions
             )
             
-            print("[StagedSearch] 階段 \(stage.label) 完成，目前總計: \(allAttractions.count) 個景點")
-            
             // 如果達到限制，停止搜尋
             if attractionsListVM.hasReachedMaxLimit {
-                print("[StagedSearch] 達到50個景點限制，停止後續搜尋")
                 break
             }
         }
         
-        print("[StagedSearch] 分階段搜尋完成，總計: \(allAttractions.count) 個景點")
         return allAttractions
     }
     
@@ -1113,7 +992,6 @@ class AttractionDetailViewModel: ObservableObject {
         maxDistance: Int,
         stageLabel: String
     ) async -> [TemplateMemoryModel] {
-        print("[RangeSearch] 搜尋範圍: \(stageLabel) (\(minDistance)m - \(maxDistance)m)")
         
         // 使用現有的NearbyAttractionsService搜尋邏輯
         let searchRadius = Double(maxDistance)
@@ -1154,7 +1032,6 @@ class AttractionDetailViewModel: ObservableObject {
         let uniqueAttractions = removeDuplicatesByLocation(attractions)
         let sortedAttractions = uniqueAttractions.sorted { $0.distanceFromUser < $1.distanceFromUser }
         
-        print("[RangeSearch] 範圍 \(stageLabel) 找到 \(sortedAttractions.count) 個景點")
         return sortedAttractions
     }
     
@@ -1176,7 +1053,6 @@ class AttractionDetailViewModel: ObservableObject {
             let search = MKLocalSearch(request: request)
             search.start { response, error in
                 if let error = error {
-                    print("[KeywordSearch] 搜尋錯誤 (\(keyword)): \(error.localizedDescription)")
                     continuation.resume(returning: [])
                     return
                 }
@@ -1214,7 +1090,6 @@ class AttractionDetailViewModel: ObservableObject {
                     }
                 }
                 
-                print("[KeywordSearch] 關鍵詞 '\(keyword)' 在 \(stageLabel) 找到 \(results.count) 個景點")
                 continuation.resume(returning: results)
             }
         }
@@ -1225,7 +1100,6 @@ class AttractionDetailViewModel: ObservableObject {
         attractions: [TemplateMemoryModel],
         attractionsManagementVM: AttractionsManagementViewModel
     ) async -> [TemplateMemoryModel] {
-        print("[WikiMatching] 開始處理 \(attractions.count) 個景點的Wikipedia匹配")
         
         var processedAttractions: [TemplateMemoryModel] = []
         
@@ -1263,7 +1137,6 @@ class AttractionDetailViewModel: ObservableObject {
             }
         }
         
-        print("[WikiMatching] 完成匹配，\(processedAttractions.count) 個景點有Wikipedia資料")
         return processedAttractions
     }
     
