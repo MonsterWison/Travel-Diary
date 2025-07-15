@@ -1,5 +1,4 @@
 ---
-description:
-globs:
-alwaysApply: false
+alwaysApply: true
 ---
+https://developer.apple.com/documentation/mapkit/

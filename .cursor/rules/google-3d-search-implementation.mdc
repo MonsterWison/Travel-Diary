@@ -131,5 +131,5 @@ if query.contains("exact") || query.contains("specific") {
 **重要提醒**：此系統已超越 Google Search 的現有匹配能力，特別是在多語言支持和動態權重調整方面。實施時應確保所有三個維度的平衡，並根據具體應用場景調整權重和門檻值。
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---

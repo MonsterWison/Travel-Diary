@@ -239,5 +239,5 @@ struct MatchingScore {
 **應用狀態**：已實現並測試通過
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---

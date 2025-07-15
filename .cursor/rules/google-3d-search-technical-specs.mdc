@@ -395,5 +395,5 @@ func testComplete3DSearch() {
 - 準確度 > 88%
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
