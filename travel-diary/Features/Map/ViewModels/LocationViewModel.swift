@@ -1311,7 +1311,7 @@ class LocationViewModel: ObservableObject {
         
         for template in templateModels {
             if template.hasWikipediaData {
-                let cache = template.toAttractionCache()
+                _ = template.toAttractionCache()
             }
         }
         

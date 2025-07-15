@@ -3,7 +3,7 @@ import Foundation
 /// 暫存記憶體模型 - 用於分階段景點提取的臨時資料儲存
 /// 格式與AttractionCache相同，用於暫存處理中的景點資料
 struct TemplateMemoryModel: Identifiable, Codable {
-    let id = UUID()
+    var id: UUID
     let names: [String: String] // 語言代碼: 名稱
     let addresses: [String: String]? // 語言代碼: 地址
     let latitude: Double
@@ -35,6 +35,7 @@ struct TemplateMemoryModel: Identifiable, Codable {
          searchRadius: String,
          processingStage: ProcessingStage = .extracted,
          hasWikipediaData: Bool = false) {
+        self.id = UUID()
         self.names = names
         self.addresses = addresses
         self.latitude = latitude

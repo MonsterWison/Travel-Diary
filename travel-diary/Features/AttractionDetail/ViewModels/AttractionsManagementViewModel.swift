@@ -419,13 +419,12 @@ class AttractionsManagementViewModel: ObservableObject {
     
     // 調試輸出
     private func printScoringResults(_ results: [(AttractionCache, Double, String)], bestScore: Double) {
-        // print("=== 三維搜尋評分結果 ===") // 移除 print
+        // 評分結果現在僅用於調試，在生產環境中不輸出
         let sortedResults = results.sorted { $0.1 > $1.1 }
-        for (index, (candidate, score, breakdown)) in sortedResults.prefix(5).enumerated() {
-            let marker = score == bestScore ? "🏆" : "📍"
-            // print("\(marker) \(index + 1). \(candidate.names["en"] ?? "Unknown") - \(breakdown)") // 移除 print
+        for (_, (_, score, _)) in sortedResults.prefix(5).enumerated() {
+            _ = score == bestScore ? "🏆" : "📍"
+            // 保留結果但不在控制台輸出
         }
-        // print("========================") // 移除 print
     }
     
     // MARK: - 輔助方法
@@ -577,8 +576,8 @@ class AttractionsManagementViewModel: ObservableObject {
         let sortedResults = results.sorted { $0.totalScore > $1.totalScore }
         
         // 可以在這裡添加日誌記錄，但不在控制台輸出
-        for (index, result) in sortedResults.enumerated() {
-            let marker = index == 0 ? "🏆" : "📍"
+        for (index, _) in sortedResults.enumerated() {
+            _ = index == 0 ? "🏆" : "📍"
             // 保留結果但不輸出到控制台
         }
     }

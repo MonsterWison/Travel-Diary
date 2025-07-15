@@ -2,7 +2,7 @@ import Foundation
 import CoreLocation
 
 struct CompareModel: Identifiable, Codable {
-    let id = UUID()
+    var id: UUID
     let name: String // 主要名稱
     let address: String // 地址
     let latitude: Double
@@ -10,6 +10,7 @@ struct CompareModel: Identifiable, Codable {
     
     /// 便利初始化方法
     init(name: String, address: String, latitude: Double, longitude: Double) {
+        self.id = UUID()
         self.name = name
         self.address = address
         self.latitude = latitude

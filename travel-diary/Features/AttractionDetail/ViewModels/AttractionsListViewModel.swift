@@ -29,59 +29,50 @@ class AttractionsListViewModel: ObservableObject {
         currentProcessingStage = "開始處理景點列表..."
         processingError = nil
         
-        do {
-            // 1. 過濾有效景點（有Wikipedia資料的）
-            currentProcessingStage = "過濾有效景點..."
-            let validAttractions = attractions.filter { $0.hasWikipediaData }
-            
-            // 2. 按距離排序
-            currentProcessingStage = "按距離排序..."
-            let sortedAttractions = validAttractions.sorted { attraction1, attraction2 in
-                return attraction1.distanceFromUser < attraction2.distanceFromUser
-            }
-            
-            // 3. 更新處理階段
-            let processedAttractions = sortedAttractions.map { attraction in
-                var updatedAttraction = attraction
-                return TemplateMemoryModel(
-                    names: updatedAttraction.names,
-                    addresses: updatedAttraction.addresses,
-                    latitude: updatedAttraction.latitude,
-                    longitude: updatedAttraction.longitude,
-                    descriptions: updatedAttraction.descriptions,
-                    source: updatedAttraction.source,
-                    distanceFromUser: updatedAttraction.distanceFromUser,
-                    searchRadius: updatedAttraction.searchRadius,
-                    processingStage: .sorted,
-                    hasWikipediaData: updatedAttraction.hasWikipediaData
-                )
-            }
-            
-            // 4. 限制數量
-            currentProcessingStage = "限制景點數量..."
-            let limitedAttractions = Array(processedAttractions.prefix(maxAttractions))
-            
-            // 5. 最終驗證
-            currentProcessingStage = "最終驗證..."
-            let finalAttractions = await validateAttractions(limitedAttractions)
-            
-            // 6. 更新狀態
-            await MainActor.run {
-                self.processedAttractions = finalAttractions
-                self.totalValidAttractions = finalAttractions.count
-                self.currentProcessingStage = "處理完成"
-                self.isProcessing = false
-            }
-            
-            return finalAttractions
-            
-        } catch {
-            await MainActor.run {
-                self.processingError = "處理景點時發生錯誤: \(error.localizedDescription)"
-                self.isProcessing = false
-            }
-            return []
+        // 1. 過濾有效景點（有Wikipedia資料的）
+        currentProcessingStage = "過濾有效景點..."
+        let validAttractions = attractions.filter { $0.hasWikipediaData }
+        
+        // 2. 按距離排序
+        currentProcessingStage = "按距離排序..."
+        let sortedAttractions = validAttractions.sorted { attraction1, attraction2 in
+            return attraction1.distanceFromUser < attraction2.distanceFromUser
         }
+        
+        // 3. 更新處理階段
+        let processedAttractions = sortedAttractions.map { attraction in
+            let updatedAttraction = attraction
+            return TemplateMemoryModel(
+                names: updatedAttraction.names,
+                addresses: updatedAttraction.addresses,
+                latitude: updatedAttraction.latitude,
+                longitude: updatedAttraction.longitude,
+                descriptions: updatedAttraction.descriptions,
+                source: updatedAttraction.source,
+                distanceFromUser: updatedAttraction.distanceFromUser,
+                searchRadius: updatedAttraction.searchRadius,
+                processingStage: .sorted,
+                hasWikipediaData: updatedAttraction.hasWikipediaData
+            )
+        }
+        
+        // 4. 限制數量
+        currentProcessingStage = "限制景點數量..."
+        let limitedAttractions = Array(processedAttractions.prefix(maxAttractions))
+        
+        // 5. 最終驗證
+        currentProcessingStage = "最終驗證..."
+        let finalAttractions = await validateAttractions(limitedAttractions)
+        
+        // 6. 更新狀態
+        await MainActor.run {
+            self.processedAttractions = finalAttractions
+            self.totalValidAttractions = finalAttractions.count
+            self.currentProcessingStage = "處理完成"
+            self.isProcessing = false
+        }
+        
+        return finalAttractions
     }
     
     /// 累計處理多個階段的景點

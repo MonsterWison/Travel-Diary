@@ -160,7 +160,7 @@ struct TravelMapView: View {
         }
         .onChange(of: viewModel.currentLocation) { _, newLocation in
             // 當位置更新時，自動搜索附近景點
-            if let location = newLocation {
+            if newLocation != nil {
                 viewModel.searchNearbyAttractions()
             }
         }
@@ -700,7 +700,7 @@ struct TravelMapView: View {
         // HIG: 確保地圖使用系統語言設置，優先顯示中文地名
         .environment(\.locale, Locale(identifier: "zh-HK"))
         .preferredColorScheme(.light) // HIG: 確保在光線下的可讀性
-        .ignoresSafeArea()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onTapGesture {
             // HIG: 點擊地圖時隱藏搜索結果和收起鍵盤
             if viewModel.showingSearchResults || isSearchFocused {

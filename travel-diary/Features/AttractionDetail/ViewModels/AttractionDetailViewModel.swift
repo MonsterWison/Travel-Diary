@@ -879,9 +879,11 @@ class AttractionDetailViewModel: ObservableObject {
         self.attractionAddress = address
         self.attractionCoordinate = coordinate
         
-        if let address = address {
+        if address != nil {
+            // 地址已設置
         }
-        if let coord = coordinate {
+        if coordinate != nil {
+            // 座標已設置
         }
         
         // 重置狀態
@@ -1052,7 +1054,7 @@ class AttractionDetailViewModel: ObservableObject {
             
             let search = MKLocalSearch(request: request)
             search.start { response, error in
-                if let error = error {
+                if error != nil {
                     continuation.resume(returning: [])
                     return
                 }
