@@ -32,17 +32,17 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		799E11CB2E0ABBF70092B919 /* travel-diary */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "travel-diary";
+			path = ".";
 			sourceTree = "<group>";
 		};
 		799E11D92E0ABBF70092B919 /* travel-diaryTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "travel-diaryTests";
+			path = "../Tests/travel-diaryTests";
 			sourceTree = "<group>";
 		};
 		799E11E32E0ABBF70092B919 /* travel-diaryUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "travel-diaryUITests";
+			path = "../Tests/travel-diaryUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
