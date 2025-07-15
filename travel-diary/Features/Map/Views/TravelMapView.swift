@@ -700,7 +700,7 @@ struct TravelMapView: View {
         // HIG: 確保地圖使用系統語言設置，優先顯示中文地名
         .environment(\.locale, Locale(identifier: "zh-HK"))
         .preferredColorScheme(.light) // HIG: 確保在光線下的可讀性
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
         .onTapGesture {
             // HIG: 點擊地圖時隱藏搜索結果和收起鍵盤
             if viewModel.showingSearchResults || isSearchFocused {
